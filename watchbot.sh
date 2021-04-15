@@ -1,7 +1,5 @@
 #!/bin/bash
 
-sem="watchbot"
-
 watch_repos() {
 	local queue="$1"
 	local watches=("${@:2}")
@@ -13,17 +11,12 @@ watch_repos() {
 	heads=()
 	nwatches="${#watches[@]}"
 
-	if ! sem_init "$sem" 0; then
-		log_info "Another instance is already running"
-		return 1
-	fi
-
 	for (( i = 0; i < nwatches; i++ )); do
 		heads["$i"]=$(<"${watches[$i]}")
 	done
 
-	while ! sem_trywait "$sem"; do
-		log_debug "Watching $nwatches files: ${watches[@]}"
+	while inst_running; do
+		log_debug "Watching $nwatches files: ${watches[*]}"
 		if ! inotifywait -qq -t 15 "${watches[@]}"; then
 			continue
 		fi
@@ -31,7 +24,10 @@ watch_repos() {
 		for (( i = 0; i < nwatches; i++ )); do
 			local cur_head
 
-			cur_head=$(<"${watches[$i]}")
+			if ! cur_head=$(<"${watches[$i]}"); then
+				log_error "Could not read ${watches[$i]}"
+				continue
+			fi
 
 			log_debug "${watches[$i]}: ${heads[$i]} -> $cur_head"
 
@@ -46,19 +42,6 @@ watch_repos() {
 		done
 	done
 
-	if ! sem_destroy "$sem"; then
-		log_error "Could not clean up semaphore $sem"
-	fi
-
-	return 0
-}
-
-stop() {
-	if ! sem_post "$sem"; then
-		log_info "Looks like no instances are running"
-		return 1
-	fi
-
 	return 0
 }
 
@@ -66,7 +49,9 @@ watchlist_add() {
 	local opt="$1"
 	local repo="$2"
 
+	log_debug "$opt: $repo"
 	watchlist+=("$repo")
+
 	return 0
 }
 
@@ -109,18 +94,9 @@ main() {
 
 	opt_add_arg "r" "repo"    "yes" "" "Repository to watch (format: /repo/path[#branch])" watchlist_add
 	opt_add_arg "q" "queue"   "yes" "" "Queue used to distribute work"
-	opt_add_arg "s" "stop"    "no"  0  "Stop a running instance"
 
 	if ! opt_parse "$@"; then
 		return 1
-	fi
-
-	if (( $(opt_get "stop") > 0 )); then
-		if ! stop; then
-			return 1
-		fi
-
-		return 0
 	fi
 
 	queue=$(opt_get "queue")
@@ -148,8 +124,7 @@ main() {
 		return 1
 	fi
 
-	start "$queue" "${watches[@]}" </dev/null &>/dev/null &
-	disown
+	inst_start watch_repos "$queue" "${watches[@]}"
 
 	return 0
 }
@@ -159,7 +134,7 @@ main() {
 		exit 1
 	fi
 
-	if ! include "log" "opt" "sem" "queue"; then
+	if ! include "log" "opt" "queue" "inst"; then
 		exit 1
 	fi
 
