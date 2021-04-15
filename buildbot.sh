@@ -1,7 +1,5 @@
 #!/bin/bash
 
-sem="buildbot"
-
 build_packages() {
 	local sourcetree="$1"
 	local gpgkey="$2"
@@ -86,12 +84,7 @@ dispatch_tasks() {
 	local taskq="$2"
 	local doneq="$3"
 
-	if ! sem_init "$sem" 0; then
-		log_error "Another instance is already running"
-		return 1
-	fi
-
-	while ! sem_trywait "$sem"; do
+	while inst_running; do
 		local workitem
 		local workdir
 		local package
@@ -124,19 +117,6 @@ dispatch_tasks() {
 		fi
 	done
 
-	if ! sem_destroy "$sem"; then
-		log_error "Could not clean up semaphore $sem"
-	fi
-
-	return 0
-}
-
-stop() {
-	if ! sem_post "$sem"; then
-		log_error "Looks like no other instances are running"
-		return 1
-	fi
-
 	return 0
 }
 
@@ -148,26 +128,31 @@ main() {
 	opt_add_arg "k" "gpgkey"     "yes" "" "The GPG key id to use"
 	opt_add_arg "t" "task-queue" "yes" "" "The queue to watch for tasks"
 	opt_add_arg "d" "done-queue" "yes" "" "The queue to place build artifacts"
-	opt_add_arg "s" "stop"       "no"  0  "Stop the running instance"
 
 	if ! opt_parse "$@"; then
 		return 1
-	fi
-
-	if (( $(opt_get "stop") > 0 )); then
-		if ! stop; then
-			return 1
-		fi
-
-		return 0
 	fi
 
 	gpgkey=$(opt_get "gpgkey")
 	tqueue=$(opt_get "task-queue")
 	dqueue=$(opt_get "done-queue")
 
-	dispatch_tasks "$gpgkey" "$tqueue" "$dqueue" </dev/null &>/dev/null &
-	disown
+	if [[ -z "$gpgkey" ]]; then
+		log_error "Need a GPG key id"
+		return 1
+	fi
+
+	if [[ -z "$tqueue" ]]; then
+		log_error "Need a task queue"
+		return 1
+	fi
+
+	if [[ -z "$dqueue" ]]; then
+		log_error "Need a queue for finished tasks"
+		return 1
+	fi
+
+	inst_start dispatch_tasks "$gpgkey" "$tqueue" "$dqueue"
 
 	return 0
 }
@@ -177,7 +162,7 @@ main() {
 		exit 1
 	fi
 
-	if ! include "log" "opt" "queue"; then
+	if ! include "log" "opt" "queue" "inst"; then
 		exit 1
 	fi
 
