@@ -172,32 +172,12 @@ watch_new_packages() {
 	return 0
 }
 
-increase_verbosity() {
-	local verbosity
-
-	verbosity=$(log_get_verbosity)
-	((verbosity++))
-	log_set_verbosity "$verbosity"
-	return 0
-}
-
-decrease_verbosity() {
-	local verbosity
-
-	verbosity=$(log_get_verbosity)
-	((verbosity--))
-	log_set_verbosity "$verbosity"
-	return 0
-}
-
 main() {
 	local repo_path
 	local repo_codename
 	local watchdir
 
 	opt_add_arg "s" "stop"    "no" 0 "Stop a running instance"
-	opt_add_arg "v" "verbose" "no" 0 "Be more verbose"         increase_verbosity
-	opt_add_arg "w" "shush"   "no" 0 "Be less verbose"         decrease_verbosity
 
 	if ! opt_parse "$@"; then
 		return 1

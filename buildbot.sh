@@ -140,24 +140,6 @@ stop() {
 	return 0
 }
 
-verbosity_increase() {
-	local verbosity
-
-	verbosity=$(log_get_verbosity)
-	((verbosity++))
-	log_set_verbosity "$verbosity"
-	return 0
-}
-
-verbosity_decrease() {
-	local verbosity
-
-	verbosity=$(log_get_verbosity)
-	((verbosity--))
-	log_set_verbosity "$verbosity"
-	return 0
-}
-
 main() {
 	local gpgkey
 	local tqueue
@@ -166,9 +148,7 @@ main() {
 	opt_add_arg "k" "gpgkey"     "yes" "" "The GPG key id to use"
 	opt_add_arg "t" "task-queue" "yes" "" "The queue to watch for tasks"
 	opt_add_arg "d" "done-queue" "yes" "" "The queue to place build artifacts"
-	opt_add_arg "v" "verbose"    "no" 0 "Be more verbose"                      verbosity_increase
-	opt_add_arg "w" "shush"      "no" 0 "Be less verbose"                      verbosity_decrease
-	opt_add_arg "s" "stop"       "no" 0 "Stop the running instance"
+	opt_add_arg "s" "stop"       "no"  0  "Stop the running instance"
 
 	if ! opt_parse "$@"; then
 		return 1

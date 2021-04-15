@@ -101,24 +101,6 @@ watch_to_head() {
 	return 0
 }
 
-verbosity_increase() {
-	local verbosity
-
-	verbosity=$(log_get_verbosity)
-	((verbosity++))
-	log_set_verbosity "$verbosity"
-	return 0
-}
-
-verbosity_decrease() {
-	local verbosity
-
-	verbosity=$(log_get_verbosity)
-	((verbosity--))
-	log_set_verbosity "$verbosity"
-	return 0
-}
-
 main() {
 	declare -ag watchlist # will be gone once forked to the background
 	local watches
@@ -128,8 +110,6 @@ main() {
 	opt_add_arg "r" "repo"    "yes" "" "Repository to watch (format: /repo/path[#branch])" watchlist_add
 	opt_add_arg "q" "queue"   "yes" "" "Queue used to distribute work"
 	opt_add_arg "s" "stop"    "no"  0  "Stop a running instance"
-	opt_add_arg "v" "verbose" "no"  0  "Be more verbose"                                   verbosity_increase
-	opt_add_arg "w" "shush"   "no"  0  "Be less verbose"                                   verbosity_decrease
 
 	if ! opt_parse "$@"; then
 		return 1
