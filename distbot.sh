@@ -1,20 +1,5 @@
 #!/bin/bash
 
-sem="distbot"
-
-check_config() {
-	local arg
-
-	for arg in "$@"; do
-		if ! conf_get "$arg" &> /dev/null; then
-			log_error "$arg not configured"
-			return 1
-		fi
-	done
-
-	return 0
-}
-
 make_repo_config() {
     local domain="$1"
     local codename="$2"
@@ -43,8 +28,8 @@ repo_init() {
 
 	local config
 
-	if ! mkdir -p "$repo/conf" &>/dev/null; then
-		log_error "Could not create $repo/conf"
+	if ! mkdir -p "$repo/conf" "$repo/incoming" "$repo/failed" &>/dev/null; then
+		log_error "Could not create directory structure in $repo"
 		return 1
 	fi
 
@@ -52,14 +37,6 @@ repo_init() {
 				  "$gpgkeyid" "$description")
 
 	if ! echo "$config" > "$repo/conf/distributions"; then
-		return 1
-	fi
-
-	return 0
-}
-
-stop() {
-	if ! sem_post "$sem"; then
 		return 1
 	fi
 
@@ -92,142 +69,109 @@ verify_package() {
 		return 1
 	fi
 
+	log_info "Good signature on $package"
+	echo "$output" | log_highlight "dpkg-sig" | log_info
+
 	return 0
 }
 
-process_new_packages() {
-	local watchdir="$1"
-	local repodir="$2"
+process_new_package() {
+	local package="$1"
+	local repo="$2"
 	local codename="$3"
 
-	local package
+	local failed
 
-	while read -r package; do
-		local failed
+	failed=true
 
-		failed=true
+	log_info "New package: $package"
 
-		log_info "New package: $package"
+	if ! verify_package "$package"; then
+		log_error "Invalid signature on package $package"
+	elif ! repo_add_package "$repo" "$codename" "$package"; then
+		log_error "Could not process $package"
+	else
+		log_info "$package successfully added to $repo:$codename"
+		failed=false
+	fi
 
-		if ! verify_package "$package"; then
-			log_error "Invalid signature on package $package"
-		elif ! repo_add_package "$repodir" "$codename" "$package"; then
-			log_error "Could not process $package"
-		else
-			log_info "$package successfully added to $repodir:$codename"
-			failed=false
+	if "$failed"; then
+		if ! mv "$package" "$repo/failed/."; then
+			log_error "Could not move $package to $repo/failed/."
 		fi
-
-		if "$failed"; then
-			if ! mv "$package" "$repodir/failed/."; then
-				log_error "Could not move $package to $dest"
-			fi
-		else
-			if ! rm "$package"; then
-				log_error "Could not remove $package"
-			fi
+	else
+		if ! rm "$package"; then
+			log_error "Could not remove $package"
 		fi
-	done < <(find "$watchdir" -type f -iname "*.deb")
+	fi
 
 	return 0
 }
 
 watch_new_packages() {
-	local watchdir="$1"
-	local repodir="$2"
+	local queue="$1"
+	local repo="$2"
 	local codename="$3"
 
-	local lock
+	while inst_running; do
+		local package
 
-	lock="$watchdir/lock"
+		log_debug "Waiting on queue $queue"
 
-	if ! trap stop TERM HUP INT EXIT QUIT; then
-		return 1
-	fi
-
-	if ! sem_init "$sem" 0; then
-		log_info "Looks like another instance is already running"
-		return 1
-	fi
-
-	while ! sem_trywait "$sem"; do
-		# Without the timeout, we'd wait forever even if we're told to stop
-		if ! inotifywait -qq -t 15 "$watchdir/queue" &>/dev/null; then
-			continue
-		fi
-
-		if mutex_lock "$lock"; then
-			process_new_packages "$watchdir/queue" "$repodir" "$codename"
-			mutex_unlock "$lock"
-		else
-			log_error "Could not acquire lock $lock"
+	        if package=$(queue_get_file "$queue" "$repo/incoming"); then
+			process_new_package "$package" "$repo" "$codename"
 		fi
 	done
-
-	if ! sem_destroy "$sem"; then
-		log_error "Could not destroy semaphore $sem"
-		return 1
-	fi
 
 	return 0
 }
 
 main() {
-	local repo_path
-	local repo_codename
-	local watchdir
+	local path
+	local codename
+	local incoming
+	local name
+	local arch
+	local gpgkey
+	local desc
 
-	opt_add_arg "s" "stop"    "no" 0 "Stop a running instance"
+	opt_add_arg "n" "name"        "yes" ""       "The name of the repository"
+	opt_add_arg "p" "path"        "yes" ""       "The path to the repository"
+	opt_add_arg "c" "codename"    "yes" "stable" "The codename of the distribution (default: stable)"
+	opt_add_arg "a" "arch"        "yes" ""       "Comma separated list of supported architectures"
+	opt_add_arg "k" "gpgkey"      "yes" ""       "The GPG key used for signing"
+	opt_add_arg "d" "description" "yes" ""       "Description of the repository"
+	opt_add_arg "i" "incoming"    "yes" ""       "The queue to watch for incoming packages"
 
 	if ! opt_parse "$@"; then
 		return 1
 	fi
 
-	if (( $(opt_get "stop") > 0 )); then
-		if ! stop; then
-			return 1
-		fi
+	path=$(opt_get "path")
+	codename=$(opt_get "codename")
+	incoming=$(opt_get "incoming")
+	name=$(opt_get "name")
+	arch=$(opt_get "arch")
+	gpgkey=$(opt_get "gpgkey")
+	desc=$(opt_get "description")
 
-		return 0
-	fi
-
-	if ! check_config "repo.path" "repo.domain" "repo.codename" \
-	     "repo.architectures" "repo.gpgkey" "repo.description" "watchdir"; then
+	if [[ -z "$path" ]] || [[ -z "$incoming" ]] || [[ -z "$name" ]] ||
+	   [[ -z "$arch" ]] || [[ -z "$gpgkey" ]] || [[ -z "$desc" ]]; then
+		log_error "Missing required arguments"
 		return 1
 	fi
 
-	watchdir=$(conf_get "watchdir")
-	repo_path=$(conf_get "repo.path")
-	repo_codename=$(conf_get "repo.codename")
+	if ! [ -d "$path" ]; then
+		# Create new repository
+		log_info "Initializing repository $name:$codename in $path"
 
-	if ! mkdir -p "$watchdir/queue" "$watchdir/failed"; then
-		log_error "Could not create watchdir"
-		return 1
-	fi
-
-	if ! [ -d "$repo_path" ]; then
-		local repo_domain
-		local repo_arch
-		local repo_key
-		local repo_desc
-
-		repo_domain=$(conf_get "repo.domain")
-		repo_arch=$(conf_get "repo.architectures")
-		repo_key=$(conf_get "repo.gpgkey")
-		repo_desc=$(conf_get "repo.description")
-
-		log_info "Initializing repository $repo_domain:$repo_codename in $repo_path"
-
-		if ! repo_init "$repo_path" "$repo_domain" "$repo_codename" \
-		     "$repo_arch" "$repo_key" "$repo_desc"; then
+		if ! repo_init "$path" "$name" "$codename" "$arch" "$gpgkey" "$desc"; then
 			log_error "Could not initialize repository"
 			return 1
 		fi
 	fi
 
-	watch_new_packages "$watchdir" "$repo_path" "$repo_codename" \
-			   </dev/null &>/dev/null &
-	disown
+	inst_start watch_new_packages "$incoming" "$path" "$codename"
 
 	return 0
 }
@@ -237,7 +181,7 @@ main() {
 		exit 1
 	fi
 
-	if ! include "log" "conf" "opt" "mutex" "sem"; then
+	if ! include "log" "opt" "queue" "inst"; then
 		exit 1
 	fi
 
