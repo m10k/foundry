@@ -135,31 +135,25 @@ main() {
 	local gpgkey
 	local desc
 
-	opt_add_arg "n" "name"        "yes" ""       "The name of the repository"
-	opt_add_arg "p" "path"        "yes" ""       "The path to the repository"
-	opt_add_arg "c" "codename"    "yes" "stable" "The codename of the distribution (default: stable)"
-	opt_add_arg "a" "arch"        "yes" ""       "Comma separated list of supported architectures"
-	opt_add_arg "k" "gpgkey"      "yes" ""       "The GPG key used for signing"
-	opt_add_arg "d" "description" "yes" ""       "Description of the repository"
-	opt_add_arg "i" "incoming"    "yes" ""       "The queue to watch for incoming packages"
+	opt_add_arg "n" "name"        "rv" ""       "The name of the repository"
+	opt_add_arg "o" "output"      "rv" ""       "The path to the repository"
+	opt_add_arg "c" "codename"    "v"  "stable" "The codename of the distribution (default: stable)"
+	opt_add_arg "a" "arch"        "rv" ""       "Comma separated list of supported architectures"
+	opt_add_arg "k" "gpgkey"      "rv" ""       "The GPG key used for signing"
+	opt_add_arg "d" "description" "rv" ""       "Description of the repository"
+	opt_add_arg "i" "input"       "rv" ""       "The queue to watch for incoming packages"
 
 	if ! opt_parse "$@"; then
 		return 1
 	fi
 
-	path=$(opt_get "path")
+	path=$(opt_get "output")
 	codename=$(opt_get "codename")
-	incoming=$(opt_get "incoming")
+	incoming=$(opt_get "input")
 	name=$(opt_get "name")
 	arch=$(opt_get "arch")
 	gpgkey=$(opt_get "gpgkey")
 	desc=$(opt_get "description")
-
-	if [[ -z "$path" ]] || [[ -z "$incoming" ]] || [[ -z "$name" ]] ||
-	   [[ -z "$arch" ]] || [[ -z "$gpgkey" ]] || [[ -z "$desc" ]]; then
-		log_error "Missing required arguments"
-		return 1
-	fi
 
 	if ! [ -d "$path" ]; then
 		# Create new repository

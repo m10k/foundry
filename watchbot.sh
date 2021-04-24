@@ -92,20 +92,15 @@ main() {
 	local queue
 	local watch
 
-	opt_add_arg "r" "repo"    "yes" "" "Repository to watch (format: /repo/path[#branch])" watchlist_add
-	opt_add_arg "q" "queue"   "yes" "" "Queue used to distribute work"
+	opt_add_arg "i" "input"  "rv" "" "Repository to watch (format: /repo/path[#branch])" \
+		    watchlist_add
+	opt_add_arg "o" "output" "rv" "" "Queue where output shall be placed"
 
 	if ! opt_parse "$@"; then
 		return 1
 	fi
 
-	queue=$(opt_get "queue")
-
-	if [ -z "$queue" ]; then
-		log_error "Need a queue"
-		return 1
-	fi
-
+	queue=$(opt_get "input")
 	watches=()
 
 	for watch in "${watchlist[@]}"; do

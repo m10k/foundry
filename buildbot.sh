@@ -122,37 +122,22 @@ dispatch_tasks() {
 
 main() {
 	local gpgkey
-	local tqueue
-	local dqueue
+	local iqueue
+	local oqueue
 
-	opt_add_arg "k" "gpgkey"     "yes" "" "The GPG key id to use"
-	opt_add_arg "t" "task-queue" "yes" "" "The queue to watch for tasks"
-	opt_add_arg "d" "done-queue" "yes" "" "The queue to place build artifacts"
+	opt_add_arg "k" "gpgkey" "rv" "" "The GPG key id to use"
+	opt_add_arg "i" "input"  "rv" "" "The queue from where build tasks will be taken"
+	opt_add_arg "o" "output" "rv" "" "The queue where build artifacts will be placed"
 
 	if ! opt_parse "$@"; then
 		return 1
 	fi
 
 	gpgkey=$(opt_get "gpgkey")
-	tqueue=$(opt_get "task-queue")
-	dqueue=$(opt_get "done-queue")
+	iqueue=$(opt_get "input")
+	oqueue=$(opt_get "output")
 
-	if [[ -z "$gpgkey" ]]; then
-		log_error "Need a GPG key id"
-		return 1
-	fi
-
-	if [[ -z "$tqueue" ]]; then
-		log_error "Need a task queue"
-		return 1
-	fi
-
-	if [[ -z "$dqueue" ]]; then
-		log_error "Need a queue for finished tasks"
-		return 1
-	fi
-
-	inst_start dispatch_tasks "$gpgkey" "$tqueue" "$dqueue"
+	inst_start dispatch_tasks "$gpgkey" "$iqueue" "$oqueue"
 
 	return 0
 }
