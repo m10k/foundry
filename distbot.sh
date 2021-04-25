@@ -126,6 +126,20 @@ watch_new_packages() {
 	return 0
 }
 
+looks_like_a_repository() {
+	local path="$1"
+
+	if ! [ -d "$path" ]; then
+		return 1
+	fi
+
+	if ! [ -d "$path/incoming" ]; then
+		return 1
+	fi
+
+	return 0
+}
+
 main() {
 	local path
 	local codename
@@ -155,7 +169,7 @@ main() {
 	gpgkey=$(opt_get "gpgkey")
 	desc=$(opt_get "description")
 
-	if ! [ -d "$path" ]; then
+	if ! looks_like_a_repository "$path"; then
 		# Create new repository
 		log_info "Initializing repository $name:$codename in $path"
 
