@@ -1,5 +1,85 @@
 #!/bin/bash
 
+userinput_to_repo() {
+	local watch="$1"
+
+	if [[ "$watch" == *"#"* ]]; then
+		echo "${watch%#*}"
+	else
+		echo "$watch"
+	fi
+
+	return 0
+}
+
+userinput_to_branch() {
+	local watch="$1"
+
+	if [[ "$watch" == *"#"* ]]; then
+		echo "${watch##*#}"
+	else
+		echo "master"
+	fi
+
+	return 0
+}
+
+watch_to_repo() {
+	local watch="$1"
+
+	local repobase
+
+	repobase="${watch%/refs/heads/*}"
+	repobase="${repobase%/.git}"
+
+	echo "$repobase"
+	return 0
+}
+
+watch_to_branch() {
+	local watch="$1"
+
+	echo "${watch##*/}"
+	return 0
+}
+
+make_buildid() {
+	local timestamp
+	local suffix
+
+	timestamp=$(date +"%Y%m%d-%H%M")
+	suffix=$(printf "%04d" "$((RANDOM % 10000))")
+
+	echo "$timestamp-$suffix"
+}
+
+enqueue_watch() {
+	local queue="$1"
+	local watch="$2"
+
+	local repository
+	local branch
+	local buildid
+
+	buildid=$(make_buildid)
+	repository=$(watch_to_repo "$watch")
+	branch=$(watch_to_branch "$watch")
+
+	cat <<EOF | log_highlight "buildinfo" | log_error
+Buildid: $buildid
+Repository: $repository
+Branch: $branch
+Queue: $queue
+Detected on: $watch
+EOF
+
+	if ! queue_put "$queue" "$buildid $repository $branch"; then
+		return 1
+	fi
+
+	return 0
+}
+
 watch_repos() {
 	local queue="$1"
 	local watches=("${@:2}")
@@ -32,7 +112,9 @@ watch_repos() {
 			log_debug "${watches[$i]}: ${heads[$i]} -> $cur_head"
 
 			if [[ "$cur_head" != "${heads[$i]}" ]]; then
-				if ! queue_put "$queue" "${watches[$i]}"; then
+				log_error "Change detected: ${watches[$i]}"
+
+				if ! enqueue_watch "$queue" "${watches[$i]}"; then
 					log_error "Could not place item in queue"
 					continue
 				fi
@@ -55,20 +137,15 @@ watchlist_add() {
 	return 0
 }
 
-watch_to_head() {
+userinput_to_head() {
 	local watch="$1"
 
 	local repo
 	local branch
 	local head
 
-	if [[ "$watch" == *"#"* ]]; then
-		repo="${watch%#*}"
-		branch="${watch##*#}"
-	else
-		repo="$watch"
-		branch="master"
-	fi
+	repo=$(userinput_to_repo "$watch")
+	branch=$(userinput_to_branch "$watch")
 
 	if [ -d "$repo/.git" ]; then
 		head="$repo/.git/refs/heads/$branch"
@@ -100,13 +177,13 @@ main() {
 		return 1
 	fi
 
-	queue=$(opt_get "input")
+	queue=$(opt_get "output")
 	watches=()
 
 	for watch in "${watchlist[@]}"; do
 		local head
 
-		if ! head=$(watch_to_head "$watch"); then
+		if ! head=$(userinput_to_head "$watch"); then
 			log_error "Cannot resolve $watch"
 			return 1
 		fi
