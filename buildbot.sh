@@ -10,7 +10,7 @@ build_packages() {
 
 	npkgs=0
 
-	if ! output=$(cd "$sourcetree" && dpkg-buildpackage --sign-key="$gpgkey"); then
+	if ! output=$(cd "$sourcetree" && dpkg-buildpackage "-k$gpgkey"); then
 		log_error "Could not build $sourcetree"
 		echo "$output" | log_highlight "dpkg-buildpackage" | log_error
 
