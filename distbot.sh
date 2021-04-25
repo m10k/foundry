@@ -76,32 +76,33 @@ verify_package() {
 }
 
 process_new_package() {
-	local package="$1"
-	local repo="$2"
-	local codename="$3"
+	local buildid="$1"
+	local package="$2"
+	local repo="$3"
+	local codename="$4"
 
 	local failed
 
 	failed=true
 
-	log_info "New package: $package"
+	log_info "[#$buildid] New package: $package"
 
 	if ! verify_package "$package"; then
-		log_error "Invalid signature on package $package"
+		log_error "[#$buildid] Invalid signature on package $package"
 	elif ! repo_add_package "$repo" "$codename" "$package"; then
-		log_error "Could not process $package"
+		log_error "[#$buildid] Could not process $package"
 	else
-		log_info "$package successfully added to $repo:$codename"
+		log_info "[#$buildid] $package successfully added to $repo:$codename"
 		failed=false
 	fi
 
 	if "$failed"; then
 		if ! mv "$package" "$repo/failed/."; then
-			log_error "Could not move $package to $repo/failed/."
+			log_error "[#$buildid] Could not move $package to $repo/failed/."
 		fi
 	else
 		if ! rm "$package"; then
-			log_error "Could not remove $package"
+			log_error "[#$buildid] Could not remove $package"
 		fi
 	fi
 
@@ -114,13 +115,23 @@ watch_new_packages() {
 	local codename="$3"
 
 	while inst_running; do
+		local workitem
 		local package
+		local buildid
 
 		log_debug "Waiting on queue $queue"
 
-	        if package=$(queue_get_file "$queue" "$repo/incoming"); then
-			process_new_package "$package" "$repo" "$codename"
+	        if ! workitem=$(queue_get_file "$queue" "$repo/incoming"); then
+			continue
 		fi
+
+		read -r package buildid <<< "$workitem"
+		if [[ -z "$package" ]] || [[ -z "$buildid" ]]; then
+			log_error "Could not parse workitem: $workitem"
+			continue
+		fi
+
+		process_new_package "$buildid" "$package" "$repo" "$codename"
 	done
 
 	return 0

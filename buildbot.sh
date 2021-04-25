@@ -1,8 +1,9 @@
 #!/bin/bash
 
 build_packages() {
-	local sourcetree="$1"
-	local gpgkey="$2"
+	local buildid="$1"
+	local sourcetree="$2"
+	local gpgkey="$3"
 
 	local output
 	local package
@@ -10,22 +11,22 @@ build_packages() {
 
 	npkgs=0
 
-	if ! output=$(cd "$sourcetree" && dpkg-buildpackage "-k$gpgkey"); then
-		log_error "Could not build $sourcetree"
-		echo "$output" | log_highlight "dpkg-buildpackage" | log_error
+	if ! output=$(cd "$sourcetree" 2>&1 && dpkg-buildpackage "-k$gpgkey" 2>&1); then
+		log_error "[#$buildid] Could not build $sourcetree"
+		echo "$output" | log_highlight "[#$buildid] dpkg-buildpackage" | log_error
 
 		return 1
 	fi
 
 	while read -r package; do
 		if ! output=$(dpkg-sig --sign builder -k "$gpgkey" "$package"); then
-			log_error "Could not sign $package"
+			log_error "[#$buildid] Could not sign $package"
 			echo "output" | log_highlight "dpkg-sig" | log_error
 			return 1
 		fi
 
 		if ! realpath "$package"; then
-			log_error "Could not normalize path $package"
+			log_error "[#$buildid] Could not normalize path $package"
 			return 1
 		fi
 
@@ -40,38 +41,32 @@ build_packages() {
 }
 
 build_repository() {
-	local target="$1"
-	local gpgkey="$2"
-	local workdir="$3"
+	local buildid="$1"
+	local repository="$2"
+	local branch="$3"
+	local gpgkey="$4"
+	local workdir="$5"
 
-	local repository
-	local branch
 	local buildroot
 	local packages
 	local err
 
 	err=1
 
-	# $target points to refs/heads/<branch>, so we need to mangle it a bit
-	repository="${target%/refs/heads*}" # repository might be bare
-	repository="${repository%/.git}"    # or not bare
-	branch="${target##*/}"
-
-	log_info "Going to build $repository#$branch"
-
 	buildroot="$workdir/buildroot"
+	log_info "[#$buildid] Building $repository#$branch in $buildroot"
 
 	if ! mkdir -p "$buildroot"; then
-		log_error "Could not create buildroot"
+		log_error "[#$buildid] Could not create buildroot"
 		return 1
 	fi
 
 	if ! git clone "$repository" -b "$branch" "$buildroot" &>/dev/null; then
-		log_error "Could not clone $repository#$branch to $buildroot"
-	elif ! packages=$(build_packages "$buildroot" "$gpgkey"); then
-		log_error "Could not build package"
+		log_error "[#$buildid] Could not clone $repository#$branch to $buildroot"
+	elif ! packages=$(build_packages "$buildid" "$buildroot" "$gpgkey"); then
+		log_error "[#$buildid] Could not build package"
 	else
-		log_info "Build succeeded: $repository"
+		log_info "[#$buildid] Build succeeded: $repository#$branch"
 		echo "$packages"
 		err=0
 	fi
@@ -85,6 +80,9 @@ dispatch_tasks() {
 	local doneq="$3"
 
 	while inst_running; do
+		local buildid
+		local repository
+		local branch
 		local workitem
 		local workdir
 		local package
@@ -95,19 +93,25 @@ dispatch_tasks() {
 			return 1
 		fi
 
-		workitem=$(queue_get "$taskq")
+		if ! workitem=$(queue_get "$taskq"); then
+			continue
+		fi
 
-		log_info "Starting build of $workitem"
+		read -r buildid repository branch <<< "$workitem"
+		if [[ -z "$buildid" ]] || [[ -z "$repository" ]] || [[ -z "$branch" ]]; then
+			log_error "Could not parse workitem: $workitem"
+			continue
+		fi
 
-		if ! result=$(build_repository "$workitem" "$gpgkey" "$workdir"); then
-			log_error "Build of $workitem failed"
+		if ! result=$(build_repository "$buildid" "$repository" "$branch" \
+					       "$gpgkey" "$workdir"); then
 			continue
 		fi
 
 		while read -r package; do
-			while ! queue_put_file "$doneq" "$package"; do
-				log_error "Could not put $package in queue. Trying again in a bit."
-				log_error "This usually means the disk with the queue is full, or permissions have been changed."
+			while ! queue_put_file "$doneq" "$package" "$buildid"; do
+				log_error "[#$buildid] Could not put $package in queue. Trying again in a bit."
+				log_error "[#$buildid] This usually means the disk with the queue is full, or permissions have been changed."
 				sleep 60
 			done
 		done <<< "$result"
