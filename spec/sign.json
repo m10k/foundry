@@ -1,0 +1,51 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id":     "https://m10k.eu/foundry/msg.sign.json",
+    "title":   "Foundry Sign Notification",
+    "type":    "object",
+
+    "properties": {
+	"tid": {
+	    "description": "Unique identifier of this transaction",
+	    "type": "string"
+	},
+
+	"artifacts": {
+	    "description": "The files that have been signed",
+	    "type": "array",
+	    "items": {
+		"type": "#/$defs/artifact"
+	    },
+	    "minItems": 1
+	},
+
+	"key": {
+	    "description": "The key that was used for signing",
+	    "type": "string"
+	}
+    },
+
+    "required": [
+	"tid",
+	"artifacts",
+	"key"
+    ],
+
+    "$defs": {
+	"artifact": {
+	    "type": "object",
+	    "properties": {
+		"uri": {
+		    "description": "URI of the artifact",
+		    "type": "string"
+		},
+
+		"checksum": {
+		    "description": "hex-encoded sha512 hash of the artifact",
+		    "type": "string",
+		    "pattern": "^[0-9a-fA-F]{128}$"
+		}
+	    }
+	}
+    }
+}

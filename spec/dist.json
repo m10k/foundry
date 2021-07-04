@@ -1,0 +1,51 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id":     "https://m10k.eu/foundry/msg.dist.json",
+    "title":   "Foundry Dist Notification",
+    "type":    "object",
+
+    "properties": {
+	"tid": {
+	    "description": "Unique identifier of this transaction",
+	    "type": "string"
+	},
+
+	"artifacts": {
+	    "description": "Artifacts that were published",
+	    "type": "array",
+	    "items": {
+		"type": "#/$defs/artifact"
+	    }
+	    "minItems": 1
+	},
+
+	"repository": {
+	    "description": "The repository where the artifacts were published",
+	    "type": "string"
+	}
+    },
+
+    "required": [
+	"tid",
+	"artifacts",
+	"repository"
+    ],
+
+    "$defs": {
+	"artifact": {
+	    "type": "object",
+	    "properties": {
+		"uri": {
+		    "description": "URI of the artifact",
+		    "type": "string"
+		},
+
+		"checksum": {
+		    "description": "hex-encoded sha512 hash of the artifact",
+		    "type": "string",
+		    "pattern": "^[0-9a-fA-F]{128}$"
+		}
+	    }
+	}
+    }
+}

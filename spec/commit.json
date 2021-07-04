@@ -1,0 +1,36 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://m10k.eu/foundry/commit.json",
+    "title": "Foundry Commit Notification",
+    "type": "object",
+
+    "properties": {
+	"repository": {
+	    "description": "The URL of the repository the commit was detected at",
+	    "type": "string",
+	    "pattern": "^(https|file)://.*$"
+	},
+
+	"branch": {
+	    "description": "The name of the branch the commit was detected on",
+	    "type": "string"
+	},
+
+	"commit": {
+	    "description": "The hash of the detected commit",
+	    "type": "string",
+	    "pattern": "^[0-9a-fA-F]+$"
+	},
+
+	"timestamp": {
+	    "description": "The unix timestamp of the time the change was detected",
+	    "type": "integer"
+	}
+    },
+
+    "required": [
+	"repository",
+	"commit",
+	"branch"
+    ]
+}

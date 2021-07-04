@@ -1,0 +1,51 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://m10k.eu/foundry/msg.test.json",
+    "title": "Foundry Test Notification",
+    "type": "object",
+
+    "properties": {
+	"tid": {
+	    "description": "Unique identifier of this transaction",
+	    "type": "string"
+	},
+
+	"repository": {
+	    "description": "URL of the source tree that was tested",
+	    "type": "string"
+	},
+
+	"branch": {
+	    "description": "Name of the branch that was tested",
+	    "type": "string"
+	},
+
+	"commit": {
+	    "description": "The commit that was tested",
+	    "type": "string"
+	},
+
+	"result": {
+	    "description": "Result of the test (zero = success, non-zero = failure)",
+	    "type": "integer"
+	},
+
+	"logs": {
+	    "description": "Log files generated during the test",
+	    "type": "array",
+	    "items": {
+		"type": "string"
+	    },
+	    "minItems": 1
+	}
+    },
+
+    "required": [
+	"tid",
+	"repository",
+	"branch",
+	"commit",
+	"result",
+	"logs"
+    ]
+}

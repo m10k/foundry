@@ -1,0 +1,73 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://m10k.eu/foundry/build.json",
+    "title": "Foundry Build Notification",
+    "type": "object",
+
+    "properties": {
+	"tid": {
+	    "description": "Unique identifier of this transaction",
+	    "type": "string"
+	},
+
+	"repository": {
+	    "description": "The repository that sources were taken from",
+	    "type": "string",
+	    "pattern": "^(https|file)://.*$"
+	},
+
+	"branch": {
+	    "description": "The branch that the sources were taken from",
+	    "type": "string"
+	},
+
+	"commit": {
+	    "description": "The commit that uniquely identifies the built sources",
+	    "type": "string",
+	    "pattern": "^[0-9a-fA-F]+$"
+	},
+
+	"artifacts": {
+	    "description": "The files resulting from the build",
+	    "type": "array",
+	    "items": {
+		"type": "#/$defs/artifact"
+	    },
+	    "minItems": 1
+	},
+
+	"logs": {
+	    "description": "Logfiles from the build",
+	    "type": "array",
+	    "items": {
+		"type": "string"
+	    },
+	    "minItems": 1
+	}
+    },
+
+    "required": [
+	"repository",
+	"branch",
+	"commit",
+	"artifacts",
+	"logs"
+    ],
+
+    "$defs": {
+	"artifact": {
+	    "type": "object",
+	    "properties": {
+		"uri": {
+		    "description": "URI of the artifact",
+		    "type": "string"
+		},
+		"checksum": {
+		    "description": "Hex-encoded sha512 checksum of the artifact",
+		    "type": "string",
+		    "pattern": "^[0-9a-fA-F]{128}$"
+		}
+	    }
+	}
+    }
+}

@@ -1,0 +1,45 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://m10k.eu/foundry/msg.distrequest.json",
+    "title": "Foundry DistRequest Message",
+    "type": "object",
+
+    "properties": {
+	"tid": {
+	    "description": "Unique identifier of this transaction",
+	    "type": "string"
+	},
+
+	"repository": {
+	    "description": "URL of the source tree the artifacts were built from",
+	    "type": "string"
+	},
+
+	"branch": {
+	    "description": "Name of the branch the artifacts were built from",
+	    "type": "string"
+	},
+
+	"commit": {
+	    "description": "Commit the artifacts were built from",
+	    "type": "string"
+	},
+
+	"artifacts": {
+	    "description": "List of artifacts built from the source tree",
+	    "type": "array",
+	    "items": {
+		"type": "string"
+	    },
+	    "minItems": 1
+	}
+    },
+
+    "required": [
+	"tid",
+	"repository",
+	"branch",
+	"commit",
+	"artifacts"
+    ]
+}
