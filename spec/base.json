@@ -1,0 +1,28 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://m10k.eu/foundry/base.json",
+    "title": "Foundry Base Message",
+    "type": "object",
+
+    "properties": {
+	"version": {
+	    "description": "The version of the foundry message format used",
+	    "type": "integer"
+	},
+
+	"type": {
+	    "description": "The message type encapsulated within the data field",
+	    "type": "string"
+	},
+
+	"data": {
+	    "description": "The encapsulated message",
+	    "type": "object"
+	}
+    },
+
+    "required": [
+	"type",
+	"data"
+    ]
+}
