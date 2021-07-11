@@ -5,46 +5,33 @@ __init() {
 		return 1
 	fi
 
+	declare -gxr __foundry_msg_signrequest_msgtype="signrequest"
+
 	return 0
 }
 
 foundry_msg_signrequest_new() {
 	local tid="$1"
-	local artifact_data=("${@:2}")
+	local artifacts=("${@:2}")
 
-	local artifacts_array
-	local artifacts
-	local signrequest
-	local i
+	local artifacts_json
+	local json
+	local msg
 
-	if ! (( $# & 1 )); then
-		# Invalid number of arguments
+	if ! artifacts_json=$(json_array "${artifacts[@]}"); then
 		return 1
 	fi
 
-	artifacts=()
-
-	for (( i = 0; (i + 1) < $#; i += 2 )); do
-		local artifact
-
-		if ! artifact=$(foundry_msg_artifact_new "${artifact_data[$i]}" \
-							 "${artifact_data[$((i+1))]}"); then
-			continue
-		fi
-
-		artifacts+=("$artifact")
-	done
-
-	if ! artifacts_array=$(json_array "${artifacts[@]}"); then
+	if ! json=$(json_object "tid"       "$tid"            \
+				"artifacts" "$artifacts_json"); then
 		return 1
 	fi
 
-	if ! signrequest=$(json_object "tid"       "$tid"            \
-				       "artifacts" "$artifacts_array"); then
+	if ! msg=$(foundry_msg_new "$__foundry_msg_signrequest_msgtype" "$json"); then
 		return 1
 	fi
 
-	echo "$signrequest"
+	echo "$msg"
 	return 0
 }
 
@@ -53,7 +40,7 @@ foundry_msg_signrequest_get_tid() {
 
 	local tid
 
-	if ! tid=$(json_object_get "$signrequest" "tid"); then
+	if ! tid=$(foundry_msg_get_data_field "$signrequest" "tid"); then
 		return 1
 	fi
 
@@ -73,7 +60,7 @@ foundry_msg_signrequest_get_artifacts() {
 	query='artifacts[] | "\(.checksum) \(.uri)"'
 	artifacts=()
 
-	if ! raw_artifacts=$(json_object_get "$signrequest" "$query"); then
+	if ! raw_artifacts=$(foundry_msg_get_data_field "$signrequest" "$query"); then
 		return 1
 	fi
 

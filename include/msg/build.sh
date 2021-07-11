@@ -5,6 +5,8 @@ __init() {
 		return 1
 	fi
 
+	declare -gxr __foundry_msg_build_msgtype="build"
+
 	return 0
 }
 
@@ -20,6 +22,7 @@ foundry_msg_build_new() {
 	local artifact_array
 	local log_array
 	local json
+	local msg
 
 	if ! artifact_array=$(json_array "${__foundry_msg_build_new_artifacts[@]}"); then
 		return 1
@@ -39,7 +42,11 @@ foundry_msg_build_new() {
 		return 1
 	fi
 
-	echo "$json"
+	if ! msg=$(foundry_msg_new "$__foundry_msg_build_msgtype" "$json"); then
+		return 1
+	fi
+
+	echo "$msg"
 	return 0
 }
 
@@ -48,7 +55,7 @@ foundry_msg_build_get_tid() {
 
 	local tid
 
-	if ! tid=$(json_object_get "$msg" "tid"); then
+	if ! tid=$(foundry_msg_get_data_field "$msg" "tid"); then
 		return 1
 	fi
 
@@ -61,7 +68,7 @@ foundry_msg_build_get_repository() {
 
         local repository
 
-	if ! repository=$(json_object_get "$msg" "repository"); then
+	if ! repository=$(foundry_msg_get_data_field "$msg" "repository"); then
 		return 1
 	fi
 
@@ -74,7 +81,7 @@ foundry_msg_build_get_branch() {
 
 	local branch
 
-	if ! branch=$(json_object_get "$msg" "branch"); then
+	if ! branch=$(foundry_msg_get_data_field "$msg" "branch"); then
 		return 1
 	fi
 
@@ -87,7 +94,7 @@ foundry_msg_build_get_commit() {
 
 	local commit
 
-	if ! commit=$(json_object_get "$msg" "commit"); then
+	if ! commit=$(foundry_msg_get_data_field "$msg" "commit"); then
 		return 1
 	fi
 
@@ -100,7 +107,7 @@ foundry_msg_build_get_result() {
 
 	local result
 
-	if ! result=$(json_object_get "$msg" "result"); then
+	if ! result=$(foundry_msg_get_data_field "$msg" "result"); then
 		return 1
 	fi
 
@@ -113,7 +120,7 @@ foundry_msg_build_get_logs() {
 
 	local logs
 
-	if ! logs=$(json_object_get "$msg" "logs[]"); then
+	if ! logs=$(foundry_msg_get_data_field "$msg" "logs[]"); then
 		return 1
 	fi
 
@@ -133,7 +140,7 @@ foundry_msg_build_get_artifacts() {
 	query='artifacts[] | "\(.checksum) \(.uri)"'
 	artifacts=()
 
-	if ! raw_artifacts=$(json_object_get "$msg" "$query"); then
+	if ! raw_artifacts=$(foundry_msg_get_data_field "$msg" "$query"); then
 		return 1
 	fi
 

@@ -5,48 +5,31 @@ __init() {
 		return 1
 	fi
 
+	declare -gxr __foundry_msg_sign_msgtype="sign"
+
 	return 0
 }
 
 foundry_msg_sign_new() {
 	local tid="$1"
 	local key="$2"
-	local artifact_data=("${@:3}")
+	local artifacts=("${@:3}")
 
+	local artifacts_json
+	local json
 	local msg
-	local artifacts
-	local artifact_array
-	local i
 
-	if (( ${#artifact_data} & 1 != 0 )); then
+	if ! artifacts_json=$(json_array "${artifacts[@]}"); then
 		return 1
 	fi
 
-	artifacts=()
-
-	for (( i = 0; i + 1 < ${#artifact_data[@]}; i += 2 )); do
-	        local artifact
-		local uri
-		local checksum
-
-		uri="${artifact_data[$i]}"
-		checksum="${artifact_data[$((i + 1))]}"
-
-		if ! artifact=$(foundry_msg_artifact_new "$uri" \
-							 "$checksum"); then
-			return 1
-		fi
-
-		artifacts+=("$artifact")
-	done
-
-	if ! artifact_array=$(json_array "${artifacts[@]}"); then
+	if ! json=$(json_object "tid"       "$tid"           \
+				"key"       "$key"           \
+				"artifacts" "$artifacts_json"); then
 		return 1
 	fi
 
-        if ! msg=$(json_object "tid"       "$tid"           \
-			       "key"       "$key"           \
-			       "artifacts" "$artifact_array"); then
+	if ! msg=$(foundry_msg_new "$__foundry_msg_sign_msgtype" "$json"); then
 		return 1
 	fi
 
@@ -59,7 +42,7 @@ foundry_msg_sign_get_tid() {
 
 	local tid
 
-	if ! tid=$(json_object_get "$msg" "tid"); then
+	if ! tid=$(foundry_msg_get_data_field "$msg" "tid"); then
 		return 1
 	fi
 
@@ -72,7 +55,7 @@ foundry_msg_sign_get_key() {
 
 	local key
 
-	if ! key=$(json_object_get "$msg" "key"); then
+	if ! key=$(foundry_msg_get_data_field "$msg" "key"); then
 		return 1
 	fi
 
@@ -92,7 +75,7 @@ foundry_msg_sign_get_artifacts() {
 	query='artifacts[] | "\(.checksum) \(.uri)"'
 	artifacts=()
 
-	if ! raw_artifacts=$(json_object_get "$msg" "$query"); then
+	if ! raw_artifacts=$(foundry_msg_get_data_field "$msg" "$query"); then
 		return 1
 	fi
 

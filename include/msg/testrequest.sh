@@ -5,6 +5,8 @@ __init() {
 		return 1
 	fi
 
+	declare -gxr __foundry_msg_testrequest_msgtype="testrequest"
+
 	return 0
 }
 
@@ -15,6 +17,7 @@ foundry_msg_testrequest_new() {
 	local commit="$4"
 
 	local json
+	local msg
 
 	if ! json=$(json_object "tid" "$tid"               \
 				"repository" "$repository" \
@@ -23,7 +26,11 @@ foundry_msg_testrequest_new() {
 		return 1
 	fi
 
-	echo "$json"
+	if ! msg=$(foundry_msg_new "$__foundry_msg_testrequest_msgtype" "$json"); then
+		return 1
+	fi
+
+	echo "$msg"
 	return 0
 }
 
@@ -32,7 +39,7 @@ foundry_msg_testrequest_get_tid() {
 
 	local tid
 
-	if ! tid=$(jq -e -r ".tid" <<< "$msg"); then
+	if ! tid=$(foundry_msg_get_data_field "$msg" "tid"); then
 		return 1
 	fi
 
@@ -46,7 +53,7 @@ foundry_msg_testrequest_get_repository() {
 
 	local repository
 
-	if ! repository=$(jq -e -r ".repository" <<< "$msg"); then
+	if ! repository=$(foundry_msg_get_data_field "$msg" "repository"); then
 		return 1
 	fi
 
@@ -59,7 +66,7 @@ foundry_msg_testrequest_get_branch() {
 
 	local branch
 
-	if ! branch=$(jq -e -r ".branch" <<< "$msg"); then
+	if ! branch=$(foundry_msg_get_data_field "$msg" "branch"); then
 		return 1
 	fi
 
@@ -72,7 +79,7 @@ foundry_msg_testrequest_get_commit() {
 
 	local commit
 
-	if ! commit=$(jq -e -r ".commit" <<< "$msg"); then
+	if ! commit=$(foundry_msg_get_data_field "$msg" "commit"); then
 		return 1
 	fi
 

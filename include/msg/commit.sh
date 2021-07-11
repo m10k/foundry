@@ -5,6 +5,8 @@ __init() {
 		return 1
 	fi
 
+	declare -gxr __foundry_msg_commit_msgtype="commit"
+
 	return 0
 }
 
@@ -13,29 +15,20 @@ foundry_msg_commit_new() {
 	local branch="$2"
 	local commit="$3"
 
+	local data
 	local msg
 
-	if ! msg=$(json_object "repository" "$repository" \
-			       "commit"     "$commit"     \
-			       "branch"     "$branch"); then
+	if ! data=$(json_object "repository" "$repository" \
+				"commit"     "$commit"     \
+				"branch"     "$branch"); then
+		return 1
+	fi
+
+	if ! msg=$(foundry_msg_new "$__foundry_msg_commit_msgtype" "$data"); then
 		return 1
 	fi
 
 	echo "$msg"
-	return 0
-}
-
-_foundry_msg_commit_get_field() {
-	local msg="$1"
-	local field="$2"
-
-	local value
-
-	if ! value=$(echo "$msg" | jq -e -r ".$field"); then
-		return 1
-	fi
-
-	echo "$value"
 	return 0
 }
 
@@ -44,7 +37,7 @@ foundry_msg_commit_get_repository() {
 
 	local repository
 
-	if ! repository=$(_foundry_msg_commit_get_field "$msg" "repository"); then
+	if ! repository=$(foundry_msg_get_data_field "$msg" "repository"); then
 		return 1
 	fi
 
@@ -57,7 +50,7 @@ foundry_msg_commit_get_branch() {
 
 	local branch
 
-	if ! branch=$(_foundry_msg_commit_get_field "$msg" "branch"); then
+	if ! branch=$(foundry_msg_get_data_field "$msg" "branch"); then
 		return 1
 	fi
 
@@ -70,7 +63,7 @@ foundry_msg_commit_get_commit() {
 
 	local commit
 
-	if ! commit=$(_foundry_msg_commit_get_field "$msg" "commit"); then
+	if ! commit=$(foundry_msg_get_data_field "$msg" "commit"); then
 		return 1
 	fi
 

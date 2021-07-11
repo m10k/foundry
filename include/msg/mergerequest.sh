@@ -5,6 +5,8 @@ __init() {
 		return 1
 	fi
 
+	declare -gxr __foundry_msg_mergerequest_msgtype="mergerequest"
+
 	return 0
 }
 
@@ -15,6 +17,7 @@ foundry_msg_mergerequest_new() {
 	local dstbranch="$4"
 
 	local json
+	local msg
 
 	if ! json=$(json_object "tid" "$tid"                     \
 				"repository" "$repository"       \
@@ -23,7 +26,12 @@ foundry_msg_mergerequest_new() {
 		return 1
 	fi
 
-	echo "$json"
+	if ! msg=$(foundry_msg_new "$__foundry_msg_mergerequest_msgtype" \
+				   "$json"); then
+		return 1
+	fi
+
+	echo "$msg"
 	return 0
 }
 
@@ -32,10 +40,11 @@ foundry_msg_mergerequest_get_tid() {
 
 	local tid
 
-	if ! tid=$(json_object_get "$msg" "tid"); then
+	if ! tid=$(foundry_msg_get_data_field "$msg" "tid"); then
 		return 1
 	fi
 
+	echo "$tid"
 	return 0
 }
 
@@ -44,7 +53,7 @@ foundry_msg_mergerequest_get_repository() {
 
 	local repository
 
-	if ! repository=$(json_object_get "$msg" "repository"); then
+	if ! repository=$(foundry_msg_get_data_field "$msg" "repository"); then
 		return 1
 	fi
 
@@ -57,7 +66,7 @@ foundry_msg_mergerequest_get_source_branch() {
 
 	local srcbranch
 
-	if ! srcbranch=$(json_object_get "$msg" "source_branch"); then
+	if ! srcbranch=$(foundry_msg_get_data_field "$msg" "source_branch"); then
 		return 1
 	fi
 
@@ -70,7 +79,7 @@ foundry_msg_mergerequest_get_destination_branch() {
 
 	local dstbranch
 
-	if ! dstbranch=$(json_object_get "$msg" "destination_branch"); then
+	if ! dstbranch=$(foundry_msg_get_data_field "$msg" "destination_branch"); then
 		return 1
 	fi
 

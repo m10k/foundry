@@ -5,6 +5,8 @@ __init() {
 		return 1
 	fi
 
+	declare -gxr __foundry_msg_test_msgtype="test"
+
 	return 0
 }
 
@@ -16,19 +18,24 @@ foundry_msg_test_new() {
 	local result="$5"
 	local logs=("${@:6}")
 
-	local logs_array
+	local logs_json
+	local json
 	local msg
 
-	if ! logs_array=$(json_array "${logs[@]}"); then
+	if ! logs_json=$(json_array "${logs[@]}"); then
 		return 1
 	fi
 
-	if ! msg=$(json_object "tid"        "$tid"        \
-			       "repository" "$repository" \
-			       "branch"     "$branch"     \
-			       "commit"     "$commit"     \
-			       "result"     "$result"     \
-			       "logs"       "$logs_array"); then
+	if ! json=$(json_object "tid"        "$tid"        \
+				"repository" "$repository" \
+				"branch"     "$branch"     \
+				"commit"     "$commit"     \
+				"result"     "$result"     \
+				"logs"       "$logs_json"); then
+		return 1
+	fi
+
+	if ! msg=$(foundry_msg_new "$__foundry_msg_test_msgtype" "$json"); then
 		return 1
 	fi
 
@@ -41,7 +48,7 @@ foundry_msg_test_get_tid() {
 
 	local tid
 
-	if ! tid=$(json_object_get "$msg" "tid"); then
+	if ! tid=$(foundry_msg_get_data_field "$msg" "tid"); then
 		return 1
 	fi
 
@@ -54,7 +61,7 @@ foundry_msg_test_get_repository() {
 
 	local repository
 
-	if ! repository=$(json_object_get "$msg" "repository"); then
+	if ! repository=$(foundry_msg_get_data_field "$msg" "repository"); then
 		return 1
 	fi
 
@@ -67,7 +74,7 @@ foundry_msg_test_get_branch() {
 
 	local branch
 
-	if ! branch=$(json_object_get "$msg" "branch"); then
+	if ! branch=$(foundry_msg_get_data_field "$msg" "branch"); then
 		return 1
 	fi
 
@@ -80,7 +87,7 @@ foundry_msg_test_get_commit() {
 
 	local commit
 
-	if ! commit=$(json_object_get "$msg" "commit"); then
+	if ! commit=$(foundry_msg_get_data_field "$msg" "commit"); then
 		return 1
 	fi
 
@@ -93,7 +100,7 @@ foundry_msg_test_get_result() {
 
 	local result
 
-	if ! result=$(json_object_get "$msg" "result"); then
+	if ! result=$(foundry_msg_get_data_field "$msg" "result"); then
 		return 1
 	fi
 
@@ -106,7 +113,7 @@ foundry_msg_test_get_logs() {
 
 	local logs
 
-	if ! logs=$(json_object_get "$msg" "logs[]"); then
+	if ! logs=$(foundry_msg_get_data_field "$msg" "logs[]"); then
 		return 1
 	fi
 

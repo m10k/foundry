@@ -5,6 +5,8 @@ __init() {
 		return 1
 	fi
 
+	declare -gxr __foundry_msg_buildrequest_msgtype="buildrequest"
+
 	return 0
 }
 
@@ -15,6 +17,7 @@ foundry_msg_buildrequest_new() {
 	local commit="$4"
 
 	local json
+	local msg
 
 	if ! json=$(json_object "tid" "$tid"               \
 				"repository" "$repository" \
@@ -23,7 +26,11 @@ foundry_msg_buildrequest_new() {
 		return 1
 	fi
 
-	echo "$json"
+	if ! msg=$(foundry_msg_new "$__foundry_msg_buildrequest_msgtype" "$json"); then
+		return 1
+	fi
+
+	echo "$msg"
 	return 0
 }
 
@@ -32,7 +39,7 @@ foundry_msg_buildrequest_get_tid() {
 
 	local tid
 
-	if ! tid=$(json_object_get "$msg" "tid"); then
+	if ! tid=$(foundry_msg_get_data_field "$msg" "tid"); then
 		return 1
 	fi
 
@@ -45,7 +52,7 @@ foundry_msg_buildrequest_get_repository() {
 
 	local repository
 
-	if ! repository=$(json_object_get "$msg" "repository"); then
+	if ! repository=$(foundry_msg_get_data_field "$msg" "repository"); then
 		return 1
 	fi
 
@@ -58,7 +65,7 @@ foundry_msg_buildrequest_get_branch() {
 
 	local branch
 
-	if ! branch=$(json_object_get "$msg" "branch"); then
+	if ! branch=$(foundry_msg_get_data_field "$msg" "branch"); then
 		return 1
 	fi
 
@@ -71,7 +78,7 @@ foundry_msg_buildrequest_get_commit() {
 
 	local commit
 
-	if ! commit=$(json_object_get "$msg" "commit"); then
+	if ! commit=$(foundry_msg_get_data_field "$msg" "commit"); then
 		return 1
 	fi
 
