@@ -5,8 +5,8 @@
     "type": "object",
 
     "properties": {
-	"tid": {
-	    "description": "Unique identifier of this transaction",
+	"context": {
+	    "description": "Context identifier of this transaction",
 	    "type": "string"
 	},
 
@@ -41,7 +41,7 @@
     },
 
     "required": [
-	"tid",
+	"context",
 	"repository",
 	"branch",
 	"commit",
