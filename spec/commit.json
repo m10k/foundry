@@ -20,11 +20,6 @@
 	    "description": "The hash of the detected commit",
 	    "type": "string",
 	    "pattern": "^[0-9a-fA-F]+$"
-	},
-
-	"timestamp": {
-	    "description": "The unix timestamp of the time the change was detected",
-	    "type": "integer"
 	}
     },
 
