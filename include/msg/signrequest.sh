@@ -11,7 +11,7 @@ __init() {
 }
 
 foundry_msg_signrequest_new() {
-	local tid="$1"
+	local context="$1"
 	local artifacts=("${@:2}")
 
 	local artifacts_json
@@ -22,7 +22,7 @@ foundry_msg_signrequest_new() {
 		return 1
 	fi
 
-	if ! json=$(json_object "tid"       "$tid"            \
+	if ! json=$(json_object "context"   "$context"       \
 				"artifacts" "$artifacts_json"); then
 		return 1
 	fi
@@ -35,16 +35,16 @@ foundry_msg_signrequest_new() {
 	return 0
 }
 
-foundry_msg_signrequest_get_tid() {
+foundry_msg_signrequest_get_context() {
 	local signrequest="$1"
 
-	local tid
+	local context
 
-	if ! tid=$(foundry_msg_get_data_field "$signrequest" "tid"); then
+	if ! context=$(foundry_msg_get_data_field "$signrequest" "context"); then
 		return 1
 	fi
 
-	echo "$tid"
+	echo "$context"
 	return 0
 }
 

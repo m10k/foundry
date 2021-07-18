@@ -11,7 +11,7 @@ __init() {
 }
 
 foundry_msg_mergerequest_new() {
-	local tid="$1"
+	local context="$1"
 	local repository="$2"
 	local srcbranch="$3"
 	local dstbranch="$4"
@@ -19,9 +19,9 @@ foundry_msg_mergerequest_new() {
 	local json
 	local msg
 
-	if ! json=$(json_object "tid" "$tid"                     \
-				"repository" "$repository"       \
-				"source_branch" "$srcbranch"     \
+	if ! json=$(json_object "context"            "$context"    \
+				"repository"         "$repository" \
+				"source_branch"      "$srcbranch"  \
 				"destination_branch" "$dstbranch"); then
 		return 1
 	fi
@@ -35,16 +35,16 @@ foundry_msg_mergerequest_new() {
 	return 0
 }
 
-foundry_msg_mergerequest_get_tid() {
+foundry_msg_mergerequest_get_context() {
 	local msg="$1"
 
-	local tid
+	local context
 
-	if ! tid=$(foundry_msg_get_data_field "$msg" "tid"); then
+	if ! context=$(foundry_msg_get_data_field "$msg" "context"); then
 		return 1
 	fi
 
-	echo "$tid"
+	echo "$context"
 	return 0
 }
 

@@ -11,7 +11,7 @@ __init() {
 }
 
 foundry_msg_testrequest_new() {
-	local tid="$1"
+	local context="$1"
 	local repository="$2"
 	local branch="$3"
 	local commit="$4"
@@ -19,10 +19,10 @@ foundry_msg_testrequest_new() {
 	local json
 	local msg
 
-	if ! json=$(json_object "tid" "$tid"               \
+	if ! json=$(json_object "context"    "$context"    \
 				"repository" "$repository" \
-				"branch" "$branch"         \
-				"commit" "$commit"); then
+				"branch"     "$branch"     \
+				"commit"     "$commit"); then
 		return 1
 	fi
 
@@ -34,16 +34,16 @@ foundry_msg_testrequest_new() {
 	return 0
 }
 
-foundry_msg_testrequest_get_tid() {
+foundry_msg_testrequest_get_context() {
 	local msg="$1"
 
-	local tid
+	local context
 
-	if ! tid=$(foundry_msg_get_data_field "$msg" "tid"); then
+	if ! context=$(foundry_msg_get_data_field "$msg" "context"); then
 		return 1
 	fi
 
-	echo "$tid"
+	echo "$context"
 	return 0
 }
 
