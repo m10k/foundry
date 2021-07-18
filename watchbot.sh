@@ -1,6 +1,19 @@
 #!/bin/bash
 
-userinput_to_repo() {
+_add_to_watchlist() {
+	local name="$1"
+	local value="$2"
+
+	# assume master if user didn't specify a branch
+	if [[ "$value" != *"#"* ]]; then
+		value+="#master"
+	fi
+
+	watchlist+=("$value")
+	return 0
+}
+
+watch_to_repository() {
 	local watch="$1"
 
 	if [[ "$watch" == *"#"* ]]; then
@@ -12,7 +25,7 @@ userinput_to_repo() {
 	return 0
 }
 
-userinput_to_branch() {
+watch_to_branch() {
 	local watch="$1"
 
 	if [[ "$watch" == *"#"* ]]; then
@@ -24,179 +37,190 @@ userinput_to_branch() {
 	return 0
 }
 
-watch_to_repo() {
+fetch_head_remote() {
 	local watch="$1"
-
-	local repobase
-
-	repobase="${watch%/refs/heads/*}"
-	repobase="${repobase%/.git}"
-
-	echo "$repobase"
-	return 0
-}
-
-watch_to_branch() {
-	local watch="$1"
-
-	echo "${watch##*/}"
-	return 0
-}
-
-make_buildid() {
-	local timestamp
-	local suffix
-
-	timestamp=$(date +"%Y%m%d-%H%M")
-	suffix=$(printf "%04d" "$((RANDOM % 10000))")
-
-	echo "$timestamp-$suffix"
-}
-
-enqueue_watch() {
-	local queue="$1"
-	local watch="$2"
 
 	local repository
 	local branch
-	local buildid
+	local info
+	local line
+	local re
 
-	buildid=$(make_buildid)
-	repository=$(watch_to_repo "$watch")
+	repository=$(watch_to_repository "$watch")
 	branch=$(watch_to_branch "$watch")
 
-	cat <<EOF | log_highlight "buildinfo" | log_error
-Buildid: $buildid
-Repository: $repository
-Branch: $branch
-Queue: $queue
-Detected on: $watch
-EOF
+	# I don't know what it is that git puts between the hash
+	# and the "refs/heads" part, but it's not whitespaces
+	re="^([0-9a-fA-F]+).*refs/heads/$branch"
 
-	if ! queue_put "$queue" "$buildid $repository $branch"; then
+	if ! info=$(curl --get --silent --location "$repository/info/refs" 2>/dev/null); then
 		return 1
 	fi
 
+	if ! line=$(grep -m 1 "refs/heads/$branch$" <<< "$info"); then
+		return 1
+	fi
+
+	if ! [[ "$line" =~ $re ]]; then
+		return 1
+	fi
+
+	echo "${BASH_REMATCH[1]}"
 	return 0
 }
 
-watch_repos() {
-	local queue="$1"
-	local watches=("${@:2}")
-
-	local nwatches
-	local heads
-	local i
-
-	heads=()
-	nwatches="${#watches[@]}"
-
-	for (( i = 0; i < nwatches; i++ )); do
-		heads["$i"]=$(<"${watches[$i]}")
-	done
-
-	while inst_running; do
-		log_debug "Watching $nwatches files: ${watches[*]}"
-		if ! inotifywait -qq -t 15 "${watches[@]}"; then
-			continue
-		fi
-
-		for (( i = 0; i < nwatches; i++ )); do
-			local cur_head
-
-			if ! cur_head=$(<"${watches[$i]}"); then
-				log_error "Could not read ${watches[$i]}"
-				continue
-			fi
-
-			log_debug "${watches[$i]}: ${heads[$i]} -> $cur_head"
-
-			if [[ "$cur_head" != "${heads[$i]}" ]]; then
-				log_error "Change detected: ${watches[$i]}"
-
-				if ! enqueue_watch "$queue" "${watches[$i]}"; then
-					log_error "Could not place item in queue"
-					continue
-				fi
-
-				heads["$i"]="$cur_head"
-			fi
-		done
-	done
-
-	return 0
-}
-
-watchlist_add() {
-	local opt="$1"
-	local repo="$2"
-
-	log_debug "$opt: $repo"
-	watchlist+=("$repo")
-
-	return 0
-}
-
-userinput_to_head() {
+fetch_head_local() {
 	local watch="$1"
 
-	local repo
+	local repository
 	local branch
 	local head
 
-	repo=$(userinput_to_repo "$watch")
-	branch=$(userinput_to_branch "$watch")
+	repository=$(watch_to_repository "$watch")
+	branch=$(watch_to_branch "$watch")
 
-	if [ -d "$repo/.git" ]; then
-		head="$repo/.git/refs/heads/$branch"
+	if [ -d "$repository/.git" ]; then
+		# "normal" repository
+		if ! head=$(< "$repository/.git/refs/heads/$branch"); then
+			return 1
+		fi
 	else
-		head="$repo/refs/heads/$branch"
+		# bare repository
+		if ! head=$(< "$repository/refs/heads/$branch"); then
+			return 1
+		fi
 	fi
-
-	if ! [ -e "$head" ]; then
-		return 1
-	fi
-
-	log_debug "Resolved $watch to $head"
 
 	echo "$head"
 	return 0
 }
 
-main() {
-	declare -ag watchlist # will be gone once forked to the background
-	local watches
-	local queue
+fetch_head() {
+	local url="$1"
+
+	local repository
+	local branch
+
+	local head
+	local fetch
+
+	case "$url" in
+		"http://"*|"https://"*|"ftp://"*)
+			fetch=fetch_head_remote
+			;;
+
+		*)
+			fetch=fetch_head_local
+			;;
+	esac
+
+	if ! head=$("$fetch" "$url"); then
+		return 1
+	fi
+
+	echo "$head"
+	return 0
+}
+
+fetch_heads() {
+	declare -n dst="$1"
+	local watchlist=("${@:2}")
+
 	local watch
 
-	opt_add_arg "i" "input"  "rv" "" "Repository to watch (format: /repo/path[#branch])" \
-		    watchlist_add
-	opt_add_arg "o" "output" "rv" "" "Queue where output shall be placed"
+	for watch in "${watchlist[@]}"; do
+		dst["$watch"]=$(fetch_head "$watch")
+	done
+
+	return 0
+}
+
+send_notification() {
+	local endpoint="$1"
+	local topic="$2"
+	local watch="$3"
+	local commit="$4"
+
+	local repository
+	local branch
+	local msg
+
+	repository=$(watch_to_repository "$watch")
+	branch=$(watch_to_branch "$watch")
+	msg=$(foundry_msg_commit_new "$repository" "$branch" "$commit")
+
+	if ! ipc_endpoint_publish "$endpoint" "$topic" "$msg"; then
+		return 1
+	fi
+
+	return 0
+}
+
+_watch() {
+	local topic="$1"
+	local interval="$2"
+	local watchlist=("${@:3}")
+
+	local endpoint
+	declare -A old_heads
+	declare -A new_heads
+
+	if ! endpoint=$(ipc_endpoint_open); then
+		return 1
+	fi
+
+	while inst_running; do
+		local watch
+
+		log_info "Checking ${#watchlist[@]} repositories for updates"
+		fetch_heads new_heads "${watchlist[@]}"
+
+		for watch in "${watchlist[@]}"; do
+			local old_head
+			local new_head
+
+			old_head="${old_heads[$watch]}"
+			new_head="${new_heads[$watch]}"
+
+			if [[ "$old_head" != "$new_head" ]]; then
+			        log_info "HEAD has changed on $watch"
+
+				if send_notification "$endpoint" "$topic" \
+						     "$watch" "$new_head"; then
+					old_heads["$watch"]="$new_head"
+				else
+					log_warn "Could not publish to $topic"
+				fi
+			fi
+		done
+
+		sleep "$interval"
+	done
+
+	return 0
+}
+
+main() {
+	local watchlist
+	local interval
+	local topic
+
+	opt_add_arg "r" "repository" "rv" ""          \
+		    "Repository to watch for updates" \
+		    "" _add_to_watchlist
+	opt_add_arg "t" "topic"      "v"  "commits"   \
+		    "Topic to publish notifications"
+	opt_add_arg "i" "interval"   "v"  30          \
+		    "Update check interval" "^[0-9]+$"
 
 	if ! opt_parse "$@"; then
 		return 1
 	fi
 
-	queue=$(opt_get "output")
-	watches=()
+	topic=$(opt_get "topic")
+	interval=$(opt_get "interval")
 
-	for watch in "${watchlist[@]}"; do
-		local head
-
-		if ! head=$(userinput_to_head "$watch"); then
-			log_error "Cannot resolve $watch"
-			return 1
-		fi
-
-		watches+=("$head")
-	done
-
-	if (( ${#watches[@]} == 0 )); then
-		log_error "Nothing to watch"
-		return 1
-	fi
-
-	inst_start watch_repos "$queue" "${watches[@]}"
+	inst_start _watch "$topic" "$interval" "${watchlist[@]}"
 
 	return 0
 }
@@ -206,7 +230,7 @@ main() {
 		exit 1
 	fi
 
-	if ! include "log" "opt" "queue" "inst"; then
+	if ! include "log" "opt" "inst" "ipc" "foundry/msg/commit"; then
 		exit 1
 	fi
 
