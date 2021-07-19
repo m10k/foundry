@@ -230,7 +230,7 @@ main() {
 		exit 1
 	fi
 
-	if ! include "log" "opt" "inst" "ipc" "foundry/msg/commit"; then
+	if ! include "log" "opt" "inst" "ipc" "foundry/msg"; then
 		exit 1
 	fi
 
