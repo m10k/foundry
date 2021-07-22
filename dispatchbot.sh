@@ -357,7 +357,7 @@ main() {
 		return 1
 	fi
 
-	if ! include "log" "opt" "ipc" "foundry/msg"; then
+	if ! include "log" "opt" "ipc" "inst" "foundry/msg"; then
 		return 1
 	fi
 
