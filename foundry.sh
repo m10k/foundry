@@ -1,13 +1,73 @@
 #!/bin/bash
 
 topics=("commits")
-endpoints=()
-processes=()
+FOUNDRY_ROOT="/var/lib/foundry"
+
+get_endpoint_names() {
+	local config
+
+	while read -r config; do
+		conf_get "endpoint" "$config"
+	done < <(conf_get_domains)
+
+	return 0
+}
+
+get_process_names() {
+	local config
+
+	while read -r config; do
+		echo "$config"
+	done < <(conf_get_domains)
+
+	return 0
+}
+
+get_topic_names() {
+	local config
+
+	while read -r config; do
+		conf_get "topic" "$config"
+	done < <(conf_get_domains)
+
+	return 0
+}
+
+_endpoint_message_log() {
+	local endpoint="$1"
+	local msg="$2"
+	local logfile="$3"
+
+	if ! echo "$msg" >> "$logfile"; then
+		return 1
+	fi
+
+	return 0
+}
 
 monitor_endpoints() {
 	local endpoints=("$@")
 
 	while inst_running; do
+		local endpoint
+
+		for endpoint in "${endpoints[@]}"; do
+			local logfile
+
+			logfile="$FOUNDRY_ROOT/endpoints/$endpoint/queue"
+			logdir="${logfile%/*}"
+
+			if ! mkdir -p "$logdir"; then
+				continue
+			fi
+
+			if ! :> "$logfile"; then
+				continue
+			fi
+
+			ipc_endpoint_foreach_message "$endpoint" _endpoint_message_log "$logfile"
+		done
+
 		sleep 5
 	done
 
@@ -15,9 +75,10 @@ monitor_endpoints() {
 }
 
 watch_endpoints() {
-	local endpoints=("$@")
-
+	local endpoints
 	local endpoint
+
+	readarray -t endpoints < <(get_endpoint_names)
 
 	# This function starts the monitor that watches all endpoints in the
 	# build system. Because this function is executed before the other
@@ -31,21 +92,66 @@ watch_endpoints() {
 		fi
 	done
 
-	if ! monitor_endpoints "${endpoints[@]}" &; then
-		return 1
-	fi
-
+	monitor_endpoints "${endpoints[@]}" &
 	return 0
 }
 
 process_is_running() {
 	local process="$1"
 
-	return 0
+	local command
+	local proc
+
+	if ! command=$(conf_get "command" "$process"); then
+		return 1
+	fi
+
+	while read -r proc; do
+		if [[ "$proc" == *" --name $process "* ]]; then
+			return 0
+		fi
+	done < <(inst_list "$command")
+
+	return 1
 }
 
 process_start() {
 	local process="$1"
+
+	local command
+	local args
+       	local param
+
+	args=()
+	command=""
+
+	conf_get_names "$process" | log_highlight "config names" | log_debug
+
+	while read -r param; do
+		local value
+
+		if ! value=$(conf_get "$param" "$process"); then
+			continue
+		fi
+
+		if [[ "$param" == "command" ]]; then
+			command="$value"
+		else
+			args+=("--$param" "$value")
+		fi
+	done < <(conf_get_names "$process")
+
+	log_highlight "cmd" <<< "$command ${args[*]}" | log_debug
+
+	if [[ -z "$command" ]]; then
+		log_error "No command in configuration for $process"
+		return 1
+	fi
+
+	if ! "$command" "${args[@]}"; then
+		log_error "$command returned an error"
+		return 1
+	fi
 
 	return 0
 }
@@ -55,11 +161,15 @@ process_watchdog() {
 
 	local process
 
+	log_info "Process watchdog ready."
+
 	while inst_running; do
 		for process in "${processes[@]}"; do
 			if process_is_running "$process"; then
 				continue
 			fi
+
+			log_info "Process $process is not running. Starting it."
 
 			if ! process_start "$process"; then
 				log_error "Could not start $process"
@@ -73,11 +183,21 @@ process_watchdog() {
 }
 
 watch_processes() {
-	local processes=("$@")
+	local processes
 
-	if ! process_watchdog "${processes[@]}" &; then
-		return 1
-	fi
+	readarray -t processes < <(conf_get_domains)
+	array_to_lines "${processes[@]}" |
+		log_highlight "processes" |
+		log_info
+
+	process_watchdog "${processes[@]}" &
+
+	return 0
+}
+
+handle_admin_message() {
+	local endpoint="$1"
+	local msg="$2"
 
 	return 0
 }
@@ -86,10 +206,30 @@ handle_message() {
 	local endpoint="$1"
 	local msg="$2"
 
-	return 1
+	local fmsg
+	local msgtype
+
+	if ! fmsg=$(ipc_msg_get_data "$msg"); then
+		return 1
+	fi
+
+	if ! msgtype=$(foundry_msg_get_type "$fmsg"); then
+		return 1
+	fi
+
+	if [[ "$msgtype" != "admin" ]]; then
+		log_warn "Ignoring unexpected message"
+		return 1
+	fi
+
+	if ! handle_admin_message "$endpoint" "$fmsg"; then
+		return 1
+	fi
+
+	return 0
 }
 
-smelter_run() {
+foundry_run() {
 	local endpoint
 	local topic
 
@@ -98,19 +238,19 @@ smelter_run() {
 		return 1
 	fi
 
-	for topic in "${topics[@]}"; do
+	while read -r topic; do
 		if ! ipc_endpoint_subscribe "$endpoint" "$topic"; then
 			log_error "Could not subscribe to $topic"
 			return 1
 		fi
-	done
+	done < <(get_topic_names)
 
-	if ! watch_endpoints "${endpoints[@]}"; then
+	if ! watch_endpoints; then
 		log_error "Couldn't start endpoint monitor"
 		return 1
 	fi
 
-	if ! watch_processes "${processes[@]}"; then
+	if ! watch_processes; then
 		log_error "Couldn't start process monitor"
 		return 1
 	fi
@@ -133,7 +273,7 @@ main() {
 		return 1
 	fi
 
-	if ! inst_singleton smelter_run; then
+	if ! inst_singleton foundry_run; then
 		return 1
 	fi
 
@@ -145,7 +285,7 @@ main() {
 		exit 1
 	fi
 
-	if ! include "log" "opt" "inst" "ipc" "foundry/msg"; then
+	if ! include "log" "conf" "opt" "inst" "ipc" "foundry/msg"; then
 		exit 1
 	fi
 
