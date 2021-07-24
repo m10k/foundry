@@ -212,6 +212,8 @@ main() {
 		    "Topic to publish notifications"
 	opt_add_arg "i" "interval"   "v"  30          \
 		    "Update check interval" "^[0-9]+$"
+	opt_add_arg "n" "name"       "rv" ""          \
+		    "The name of this instance"
 
 	if ! opt_parse "$@"; then
 		return 1
