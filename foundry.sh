@@ -110,6 +110,10 @@ process_is_running() {
 		if [[ "$proc" == *" --name $process "* ]]; then
 			return 0
 		fi
+
+		if [[ "$proc" == *" --name $process" ]]; then
+			return 0
+		fi
 	done < <(inst_list "$command")
 
 	return 1
@@ -122,10 +126,8 @@ process_start() {
 	local args
        	local param
 
-	args=()
+	args=("--name" "$process")
 	command=""
-
-	conf_get_names "$process" | log_highlight "config names" | log_debug
 
 	while read -r param; do
 		local value
