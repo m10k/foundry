@@ -341,6 +341,8 @@ _route_messages() {
 }
 
 main() {
+	opt_add_arg "n" "name" "rv" "" "The name of this instance"
+
 	if ! opt_parse "$@"; then
 		return 1
 	fi
