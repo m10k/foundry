@@ -30,7 +30,6 @@
     "required": [
 	"context",
 	"repository",
-	"branch",
-	"commit"
+	"branch"
     ]
 }
