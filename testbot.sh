@@ -190,7 +190,7 @@ main() {
 		    "The name of this instance"
 	opt_add_arg "e" "endpoint" "v"  "pub/testbot" \
 		    "The endpoint to use for IPC messaging"
-	opt_add_arg "t" "topic"    "v"  "merges"      \
+	opt_add_arg "t" "topic"    "v"  "tests"       \
 		    "The topic under which to publish notifications"
 
 	if ! opt_parse "$@"; then
