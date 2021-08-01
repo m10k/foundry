@@ -14,15 +14,13 @@ foundry_msg_buildrequest_new() {
 	local context="$1"
 	local repository="$2"
 	local branch="$3"
-	local commit="$4"
 
 	local json
 	local msg
 
 	if ! json=$(json_object "context"    "$context"    \
 				"repository" "$repository" \
-				"branch"     "$branch"     \
-				"commit"     "$commit"); then
+				"branch"     "$branch"); then
 		return 1
 	fi
 
@@ -70,18 +68,5 @@ foundry_msg_buildrequest_get_branch() {
 	fi
 
 	echo "$branch"
-	return 0
-}
-
-foundry_msg_buildrequest_get_commit() {
-	local msg="$1"
-
-	local commit
-
-	if ! commit=$(foundry_msg_get_data_field "$msg" "commit"); then
-		return 1
-	fi
-
-	echo "$commit"
 	return 0
 }

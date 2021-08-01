@@ -14,9 +14,8 @@ foundry_msg_build_new() {
 	local context="$1"
 	local repository="$2"
 	local branch="$3"
-	local commit="$4"
-	local result="$5"
-	local -n __foundry_msg_build_new_artifacts="$6"
+	local result="$4"
+	local -n __foundry_msg_build_new_artifacts="$5"
 
 	local artifact_array
 	local json
@@ -29,7 +28,6 @@ foundry_msg_build_new() {
 	if ! json=$(json_object "context"    "$context"       \
 				"repository" "$repository"    \
 				"branch"     "$branch"        \
-				"commit"     "$commit"        \
 				"result"     "$result"        \
 				"artifacts"  "$artifact_array"); then
 		return 1
@@ -79,19 +77,6 @@ foundry_msg_build_get_branch() {
 	fi
 
 	echo "$branch"
-	return 0
-}
-
-foundry_msg_build_get_commit() {
-	local msg="$1"
-
-	local commit
-
-	if ! commit=$(foundry_msg_get_data_field "$msg" "commit"); then
-		return 1
-	fi
-
-	echo "$commit"
 	return 0
 }
 
