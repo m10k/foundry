@@ -3,7 +3,6 @@
 test_source_tree() {
 	local repository="$1"
 	local branch="$2"
-	local commit="$3"
 
 	local destination
 	local err
@@ -18,21 +17,6 @@ test_source_tree() {
 		local errmsg
 
 		errmsg="Could not check out $repository#$branch to $destination"
-		log_error "$errmsg"
-		echo "$errmsg"
-
-		if ! rm -rf "$destination"; then
-			log_warn "Could not remove $destination"
-			echo "Could not remove $destination"
-		fi
-
-		return 1
-	fi
-
-	if ! ( cd "$destination" && git checkout "$commit" ); then
-		local errmsg
-
-		errmsg="Could not check out commit $commit from $repository"
 		log_error "$errmsg"
 		echo "$errmsg"
 
@@ -64,21 +48,15 @@ publish_result() {
 	local context="$3"
 	local repository="$4"
 	local branch="$5"
-	local commit="$6"
-	local result="$7"
-	local testlog="$8"
+	local result="$6"
 
 	local testmsg
-	local testlogs
 
-	readarray -t testlogs <<< "$testlog"
-
-	if ! testmsg=$(foundry_msg_test_new "$context"      \
-					    "$repository"   \
-					    "$branch"       \
-					    "$commit"       \
-					    "$result"       \
-					    "${testlogs[@]}"); then
+	if ! testmsg=$(foundry_msg_test_new "$context"    \
+					    "$repository" \
+					    "$branch"     \
+					    "$commit"     \
+					    "$result"); then
 		log_error "Could not make test message"
 		return 1
 	fi
@@ -114,10 +92,6 @@ handle_test_request() {
 	elif ! branch=$(foundry_msg_testrequest_get_branch "$request"); then
 		log_warn "Could not get branch from message. Dropping."
 		return 1
-
-	elif ! commit=$(foundry_msg_testrequest_get_commit "$request"); then
-		log_warn "Could not get commit from message. Dropping."
-		return 1
 	fi
 
 	result=0
@@ -126,7 +100,7 @@ handle_test_request() {
 		return 1
 	fi
 
-	if ! test_source_tree "$repository" "$branch" "$commit" &> "$testlog"; then
+	if ! test_source_tree "$repository" "$branch" &> "$testlog"; then
 		result=1
 	fi
 
@@ -140,8 +114,8 @@ handle_test_request() {
 		return 1
 	fi
 
-	if ! publish_result "$endpoint" "$topic" "$context" "$repository" \
-	                    "$branch" "$commit" "$result" "$testlog"; then
+	if ! publish_result "$endpoint" "$topic" "$context" \
+	                    "$repository" "$branch" "$result"; then
 		log_warn "Could not publish test result"
 		return 1
 	fi
