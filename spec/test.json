@@ -28,15 +28,6 @@
 	"result": {
 	    "description": "Result of the test (zero = success, non-zero = failure)",
 	    "type": "integer"
-	},
-
-	"logs": {
-	    "description": "Log files generated during the test",
-	    "type": "array",
-	    "items": {
-		"type": "string"
-	    },
-	    "minItems": 1
 	}
     },
 
@@ -45,7 +36,6 @@
 	"repository",
 	"branch",
 	"commit",
-	"result",
-	"logs"
+	"result"
     ]
 }

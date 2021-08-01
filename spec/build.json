@@ -34,15 +34,6 @@
 		"type": "#/$defs/artifact"
 	    },
 	    "minItems": 1
-	},
-
-	"logs": {
-	    "description": "Logfiles from the build",
-	    "type": "array",
-	    "items": {
-		"type": "string"
-	    },
-	    "minItems": 1
 	}
     },
 
@@ -51,8 +42,7 @@
 	"repository",
 	"branch",
 	"commit",
-	"artifacts",
-	"logs"
+	"artifacts"
     ],
 
     "$defs": {
