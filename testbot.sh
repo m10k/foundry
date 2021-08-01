@@ -55,7 +55,6 @@ publish_result() {
 	if ! testmsg=$(foundry_msg_test_new "$context"    \
 					    "$repository" \
 					    "$branch"     \
-					    "$commit"     \
 					    "$result"); then
 		log_error "Could not make test message"
 		return 1
@@ -77,7 +76,6 @@ handle_test_request() {
 	local context
 	local repository
 	local branch
-	local commit
 	local result
 	local testlog
 
