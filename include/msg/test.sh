@@ -16,22 +16,15 @@ foundry_msg_test_new() {
 	local branch="$3"
 	local commit="$4"
 	local result="$5"
-	local logs=("${@:6}")
 
-	local logs_json
 	local json
 	local msg
-
-	if ! logs_json=$(json_array "${logs[@]}"); then
-		return 1
-	fi
 
 	if ! json=$(json_object "context"    "$context"    \
 				"repository" "$repository" \
 				"branch"     "$branch"     \
 				"commit"     "$commit"     \
-				"result"     "$result"     \
-				"logs"       "$logs_json"); then
+				"result"     "$result"); then
 		return 1
 	fi
 
@@ -105,18 +98,5 @@ foundry_msg_test_get_result() {
 	fi
 
 	echo "$result"
-	return 0
-}
-
-foundry_msg_test_get_logs() {
-	local msg="$1"
-
-	local logs
-
-	if ! logs=$(foundry_msg_get_data_field "$msg" "logs[]"); then
-		return 1
-	fi
-
-	echo "$logs"
 	return 0
 }

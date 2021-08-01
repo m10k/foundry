@@ -16,19 +16,13 @@ foundry_msg_build_new() {
 	local branch="$3"
 	local commit="$4"
 	local result="$5"
-	local -n __foundry_msg_build_new_logs="$6"
-	local -n __foundry_msg_build_new_artifacts="$7"
+	local -n __foundry_msg_build_new_artifacts="$6"
 
 	local artifact_array
-	local log_array
 	local json
 	local msg
 
 	if ! artifact_array=$(json_array "${__foundry_msg_build_new_artifacts[@]}"); then
-		return 1
-	fi
-
-	if ! log_array=$(json_array "${__foundry_msg_build_new_logs[@]}"); then
 		return 1
 	fi
 
@@ -37,7 +31,6 @@ foundry_msg_build_new() {
 				"branch"     "$branch"        \
 				"commit"     "$commit"        \
 				"result"     "$result"        \
-				"logs"       "$log_array"     \
 				"artifacts"  "$artifact_array"); then
 		return 1
 	fi
@@ -112,19 +105,6 @@ foundry_msg_build_get_result() {
 	fi
 
 	echo "$result"
-	return 0
-}
-
-foundry_msg_build_get_logs() {
-	local msg="$1"
-
-	local logs
-
-	if ! logs=$(foundry_msg_get_data_field "$msg" "logs[]"); then
-		return 1
-	fi
-
-	echo "$logs"
 	return 0
 }
 
