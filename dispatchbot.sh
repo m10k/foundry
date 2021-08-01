@@ -32,6 +32,35 @@ emit_signrequest() {
 	return 0
 }
 
+emit_buildrequest() {
+	local endpoint="$1"
+	local mergemsg="$2"
+
+	local context
+	local repository
+	local branch
+	local buildreq
+
+	if ! context=$(foundry_msg_merge_get_context "$mergemsg") ||
+	   ! repository=$(foundry_msg_merge_get_repository "$mergemsg") ||
+	   ! branch=$(foundry_msg_merge_get_destination_branch "$mergemsg"); then
+		log_error "Malformed merge message"
+		return 1
+	fi
+
+	if ! buildreq=$(foundry_msg_buildrequest_new "$context" \
+						     "$repository" \
+						     "$branch"); then
+		return 1
+	fi
+
+	if ! ipc_endpoint_send "$endpoint" "pub/buildbot" "$buildreq"; then
+		return 1
+	fi
+
+	return 0
+}
+
 emit_testrequest() {
 	local endpoint="$1"
 	local commitmsg="$2"
@@ -210,13 +239,6 @@ _handle_commit() {
 	fi
 
 	case "$branch" in
-		"stable")
-		        if ! emit_buildrequest "$endpoint" "$msg" \
-			                       "$repository" "$branch"; then
-				return 1
-			fi
-			;;
-
 		"testing")
 			if ! emit_testrequest "$endpoint" "$msg" \
 			                      "$repository" "$branch"; then
@@ -263,6 +285,26 @@ _handle_sign() {
 	return 0
 }
 
+_handle_merge() {
+	local endpoint="$1"
+	local msg="$2"
+
+	local branch
+
+	if ! branch=$(foundry_msg_merge_get_destination_branch "$msg"); then
+		log_error "Malformed message"
+		return 1
+	fi
+
+	if [[ "$branch" == "master" ]] || [[ "$branch" == "stable" ]]; then
+		if ! emit_buildrequest "$endpoint" "$msg"; then
+			return 1
+		fi
+	fi
+
+	return 0
+}
+
 _handle_notification() {
 	local endpoint="$1"
 	local msg="$2"
@@ -290,6 +332,10 @@ _handle_notification() {
 			_handle_sign "$endpoint" "$fmsg"
 			;;
 
+		"$__foundry_msg_type_merge")
+			_handle_merge "$endpoint" "$fmsg"
+			;;
+
 		255)
 			log_warn "Invalid message received"
 			return 1
@@ -312,6 +358,7 @@ _route_messages() {
 
 	topics=("commits"
 		"tests"
+		"merges"
 		"builds"
 		"signs")
 
