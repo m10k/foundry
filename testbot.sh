@@ -212,7 +212,7 @@ main() {
 		exit 1
 	fi
 
-	if ! include "log" "opt" "ipc" "foundry/msg" "foundry/context"; then
+	if ! include "log" "opt" "ipc" "inst" "foundry/msg" "foundry/context"; then
 		exit 1
 	fi
 
