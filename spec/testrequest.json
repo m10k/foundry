@@ -18,12 +18,6 @@
 	"branch": {
 	    "description": "Name of the branch containing the commit to be tested",
 	    "type": "string"
-	},
-
-	"commit": {
-	    "description": "Commit that is to be tested",
-	    "type": "string",
-	    "pattern": "^[0-9a-fA-F]+$"
 	}
     },
 

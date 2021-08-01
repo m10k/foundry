@@ -20,11 +20,6 @@
 	    "type": "string"
 	},
 
-	"commit": {
-	    "description": "The commit that was tested",
-	    "type": "string"
-	},
-
 	"result": {
 	    "description": "Result of the test (zero = success, non-zero = failure)",
 	    "type": "integer"
@@ -35,7 +30,6 @@
 	"context",
 	"repository",
 	"branch",
-	"commit",
 	"result"
     ]
 }

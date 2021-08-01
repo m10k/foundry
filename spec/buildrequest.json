@@ -18,12 +18,6 @@
 	"branch": {
 	    "description": "Name of the branch that contains the commit to be built",
 	    "type": "string"
-	},
-
-	"commit": {
-	    "description": "Commit that is to be built",
-	    "type": "string",
-	    "pattern": "^[0-9a-fA-F]+$"
 	}
     },
 

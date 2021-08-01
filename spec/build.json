@@ -21,12 +21,6 @@
 	    "type": "string"
 	},
 
-	"commit": {
-	    "description": "The commit that uniquely identifies the built sources",
-	    "type": "string",
-	    "pattern": "^[0-9a-fA-F]+$"
-	},
-
 	"artifacts": {
 	    "description": "The files resulting from the build",
 	    "type": "array",
@@ -41,7 +35,6 @@
 	"context",
 	"repository",
 	"branch",
-	"commit",
 	"artifacts"
     ],
 

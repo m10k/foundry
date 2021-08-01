@@ -20,11 +20,6 @@
 	    "type": "string"
 	},
 
-	"commit": {
-	    "description": "Commit the artifacts were built from",
-	    "type": "string"
-	},
-
 	"artifacts": {
 	    "description": "List of artifacts built from the source tree",
 	    "type": "array",
@@ -39,7 +34,6 @@
 	"context",
 	"repository",
 	"branch",
-	"commit",
 	"artifacts"
     ]
 }
