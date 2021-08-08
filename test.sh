@@ -55,6 +55,9 @@ test_testbot() {
 	local endpoint
 	local testreq
 	local context
+	local package
+
+	package="${repository##*/}"
 
 	if ! endpoint=$(ipc_endpoint_open); then
 		log_error "Could not open IPC endpoint"
@@ -66,7 +69,7 @@ test_testbot() {
 		return 1
 	fi
 
-	if ! context=$(foundry_context_new); then
+	if ! context=$(foundry_context_new "$package"); then
 		log_error "Could not make a new foundry context"
 		return 1
 	fi
