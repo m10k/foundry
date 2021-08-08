@@ -143,7 +143,7 @@ foundry_context_get_logs() {
 	local logs
 	local log
 
-	logdir="$__foundry_context_root/$context/$logtype"
+	logdir="$__foundry_context_root/$context/logs/$logtype"
 	logs=()
 
 	while read -r log; do
