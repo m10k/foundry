@@ -159,3 +159,31 @@ foundry_context_get_logs() {
 	array_to_lines "${logs[@]}"
 	return 0
 }
+
+foundry_context_log() {
+	local context="$1"
+	local logtype="$2"
+	local messages=("${@:3}")
+
+	local logdir
+	local logname
+
+	logdir="$__foundry_context_root/$context/logs/$logtype"
+	logname="$logdir/default.log"
+
+	if ! mkdir -p "$logdir"; then
+		return 1
+	fi
+
+	if (( ${#messages[@]} > 0 )); then
+		if ! array_to_lines "${messages[@]}" >> "$logname"; then
+			return 1
+		fi
+	else
+		if ! cat /dev/stdin >> "$logname"; then
+			return 1
+		fi
+	fi
+
+	return 0
+}
