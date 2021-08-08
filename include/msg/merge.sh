@@ -16,7 +16,6 @@ foundry_msg_merge_new() {
 	local srcbranch="$3"
 	local dstbranch="$4"
 	local status="$5"
-	local log="$6"
 
 	local json
 	local msg
@@ -25,8 +24,7 @@ foundry_msg_merge_new() {
 				"repository" "$repository" \
 				"srcbranch"  "$srcbranch"  \
 				"dstbranch"  "$dstbranch"  \
-				"status"     "$status"     \
-				"log"        "$log"); then
+				"status"     "$status"); then
 		return 1
 	fi
 
@@ -100,18 +98,5 @@ foundry_msg_merge_get_status() {
 	fi
 
 	echo "$status"
-	return 0
-}
-
-foundry_msg_merge_get_log() {
-	local msg="$1"
-
-	local log
-
-	if ! log=$(foundry_msg_get_data_field "$msg" "log"); then
-		return 1
-	fi
-
-	echo "$log"
 	return 0
 }
