@@ -26,7 +26,7 @@ build() {
 	local err
 
 	err=0
-	if ! output=$(git clone "$repository" -b "$branch" "$builddir" 2>&1); then
+	if ! output=$(git clone "$repository" -b "$branch" "$builddir/sources" 2>&1); then
 		err=1
 	fi
 
@@ -39,7 +39,7 @@ build() {
 		return 1
 	fi
 
-	if ! output=$(cd "$builddir" && make deb 2>&1); then
+	if ! output=$(cd "$builddir/sources" && make deb 2>&1); then
 		err=1
 	fi
 
