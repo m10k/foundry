@@ -1,147 +1,205 @@
 #!/bin/bash
 
-build_packages() {
-	local buildid="$1"
-	local sourcetree="$2"
-	local gpgkey="$3"
+store_packages() {
+	local context="$1"
+	local builddir="$2"
+
+	local package
+
+	while read -r package; do
+		if ! foundry_context_add_file "$context" "build" "$package"; then
+			log_error "Could not store artifact $package in $context"
+			return 1
+		fi
+	done < <(find "$builddir" -type f -name "*.deb")
+
+	return 0
+}
+
+build() {
+	local context="$1"
+	local repository="$2"
+	local branch="$3"
+	local builddir="$4"
 
 	local output
-	local package
-	local npkgs
+	local err
 
-	npkgs=0
+	err=0
+	if ! output=$(git clone "$repository" -b "$branch" "$builddir" 2>&1); then
+		err=1
+	fi
 
-	if ! output=$(cd "$sourcetree" 2>&1 && dpkg-buildpackage "-k$gpgkey" 2>&1); then
-		log_error "[#$buildid] Could not build $sourcetree"
-		echo "$output" | log_highlight "[#$buildid] dpkg-buildpackage" | log_error
-
+	if ! foundry_context_log "$context" "build" <<< "$output"; then
+		log_error "Could not log to $context"
 		return 1
 	fi
 
-	while read -r package; do
-		if ! output=$(dpkg-sig --sign builder -k "$gpgkey" "$package"); then
-			log_error "[#$buildid] Could not sign $package"
-			echo "output" | log_highlight "dpkg-sig" | log_error
-			return 1
-		fi
+	if (( err != 0 )); then
+		return 1
+	fi
 
-		if ! realpath "$package"; then
-			log_error "[#$buildid] Could not normalize path $package"
-			return 1
-		fi
+	if ! output=$(cd "$builddir" && make deb 2>&1); then
+		err=1
+	fi
 
-		((npkgs++))
-	done < <(find "$sourcetree/.." -mindepth 1 -maxdepth 1 -type f -iname "*.deb")
+	if ! foundry_context_log "$context" "build" <<< "$output"; then
+		log_error "Could not log to $context"
+		return 1
+	fi
 
-	if (( npkgs == 0 )); then
+	if (( err != 0 )); then
+		return 1
+	fi
+
+	if ! store_packages "$context" "$builddir"; then
+		log_error "Could not store packages for $context"
 		return 1
 	fi
 
 	return 0
 }
 
-build_repository() {
-	local buildid="$1"
-	local repository="$2"
-	local branch="$3"
-	local gpgkey="$4"
-	local workdir="$5"
+send_build_notification() {
+	local endpoint="$1"
+	local topic="$2"
+	local context="$3"
+	local repository="$4"
+	local branch="$5"
+	local result="$6"
 
-	local buildroot
-	local packages
-	local err
+	local buildmsg
 
-	err=1
-
-	buildroot="$workdir/buildroot"
-	log_info "[#$buildid] Building $repository#$branch in $buildroot"
-
-	if ! mkdir -p "$buildroot"; then
-		log_error "[#$buildid] Could not create buildroot"
+	if ! buildmsg=$(foundry_msg_build_new "$context" "$repository" \
+					      "$branch" "$result"); then
+		log_error "Could not make build message"
 		return 1
 	fi
 
-	if ! git clone "$repository" -b "$branch" "$buildroot" &>/dev/null; then
-		log_error "[#$buildid] Could not clone $repository#$branch to $buildroot"
-	elif ! packages=$(build_packages "$buildid" "$buildroot" "$gpgkey"); then
-		log_error "[#$buildid] Could not build package"
+	log_info "Sending build message to $topic"
+	if ! ipc_endpoint_publish "$endpoint" "$topic" "$buildmsg"; then
+		log_error "Could not publish message on $endpoint to $topic"
+		return 1
+	fi
+
+	return 0
+}
+
+handle_build_request() {
+	local endpoint="$1"
+	local topic="$2"
+	local request="$3"
+
+	local context
+	local repository
+	local branch
+	local builddir
+	local result
+	local err
+
+	if ! context=$(foundry_msg_buildrequest_get_context "$request"); then
+		log_warn "No context in buildrequest. Dropping."
+		return 1
+	fi
+
+	inst_set_status "Building $context"
+
+	if ! repository=$(foundry_msg_buildrequest_get_repository "$request"); then
+		log_warn "No repository in buildrequest. Dropping."
+		return 1
+	fi
+
+	if ! branch=$(foundry_msg_buildrequest_get_branch "$request"); then
+		log_warn "No branch in buildrequest. Dropping."
+		return 1
+	fi
+
+	if ! builddir=$(mktemp -d); then
+		log_error "Could not make temporary build directory"
+		return 1
+	fi
+
+	log_info "Building $context in $builddir"
+	if ! build "$context" "$repository" "$branch" "$builddir"; then
+		result=1
 	else
-		log_info "[#$buildid] Build succeeded: $repository#$branch"
-		echo "$packages"
+		result=0
+	fi
+
+	log_info "Finished build of $context with status $result"
+
+	if ! send_build_notification "$endpoint" "$topic" "$context" \
+	                             "$repository" "$branch" "$result"; then
+		err=1
+	else
 		err=0
+	fi
+
+	if ! rm -rf "$builddir"; then
+		log_warn "Could not remove temporary build directory $builddir"
 	fi
 
 	return "$err"
 }
 
 dispatch_tasks() {
-	local gpgkey="$1"
-	local taskq="$2"
-	local doneq="$3"
+	local endpoint_name="$1"
+	local topic="$2"
+
+	local endpoint
+
+	if ! endpoint=$(ipc_endpoint_open "$endpoint_name"); then
+		log_error "Could not open endpoint $endpoint_name"
+		return 1
+	fi
 
 	while inst_running; do
-		local buildid
-		local repository
-		local branch
-		local workitem
-		local workdir
-		local package
-		local result
+		local msg
+		local data
+		local msgtype
 
-		if ! workdir=$(mktemp -d); then
-			log_error "Could not create workdir"
-			return 1
-		fi
+		inst_set_status "Awaiting build requests"
 
-		if ! workitem=$(queue_get "$taskq"); then
+		if ! msg=$(ipc_endpoint_recv "$endpoint" 5); then
 			continue
 		fi
 
-		read -r buildid repository branch <<< "$workitem"
-		if [[ -z "$buildid" ]] || [[ -z "$repository" ]] || [[ -z "$branch" ]]; then
-			log_error "Could not parse workitem: $workitem"
+		if ! data=$(ipc_msg_get_data "$msg"); then
+			log_warn "Dropping malformed message"
 			continue
 		fi
 
-		if ! result=$(build_repository "$buildid" "$repository" "$branch" \
-					       "$gpgkey" "$workdir"); then
+		if ! msgtype=$(foundry_msg_get_type "$data") ||
+		   [[ "$msgtype" != "buildrequest" ]]; then
+			log_warn "Dropping message with unexpected type"
 			continue
 		fi
 
-		while read -r package; do
-			while ! queue_put_file "$doneq" "$package" "$buildid"; do
-				log_error "[#$buildid] Could not put $package in queue. Trying again in a bit."
-				log_error "[#$buildid] This usually means the disk with the queue is full, or permissions have been changed."
-				sleep 60
-			done
-		done <<< "$result"
+		inst_set_status "Build request received"
 
-		if ! rm -rf "$workdir"; then
-			log_error "Could not remove workdir $workdir"
-		fi
+		handle_build_request "$endpoint" "$topic" "$data"
 	done
 
 	return 0
 }
 
 main() {
-	local gpgkey
-	local iqueue
-	local oqueue
+	local endpoint
+	local topic
 
-	opt_add_arg "k" "gpgkey" "rv" "" "The GPG key id to use"
-	opt_add_arg "i" "input"  "rv" "" "The queue from where build tasks will be taken"
-	opt_add_arg "o" "output" "rv" "" "The queue where build artifacts will be placed"
+	opt_add_arg "e" "endpoint" "v" "pub/buildbot" "The IPC endpoint to listen on"
+	opt_add_arg "t" "topic"    "v" "builds"       "The topic to publish builds under"
 
 	if ! opt_parse "$@"; then
 		return 1
 	fi
 
-	gpgkey=$(opt_get "gpgkey")
-	iqueue=$(opt_get "input")
-	oqueue=$(opt_get "output")
+	endpoint=$(opt_get "endpoint")
+	topic=$(opt_get "topic")
 
-	inst_start dispatch_tasks "$gpgkey" "$iqueue" "$oqueue"
+	if ! inst_start dispatch_tasks "$endpoint" "$topic"; then
+		return 1
+	fi
 
 	return 0
 }
@@ -151,7 +209,7 @@ main() {
 		exit 1
 	fi
 
-	if ! include "log" "opt" "queue" "inst"; then
+	if ! include "log" "opt" "inst" "ipc" "foundry/msg" "foundry/context"; then
 		exit 1
 	fi
 
