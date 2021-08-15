@@ -60,78 +60,125 @@ repo_add_package() {
 
 verify_package() {
 	local package="$1"
-	local output
 
-	if ! output=$(dpkg-sig --verify "$package"); then
+	log_info "Verifying signature on $package"
+	if ! dpkg-sig --verify "$package" | log_info "dpkg-sig --verify \"$package\""; then
 		log_error "Could not verify signature on $package"
-		echo "$output" | log_highlight "dpkg-sig" | log_error
 
 		return 1
 	fi
 
 	log_info "Good signature on $package"
-	echo "$output" | log_highlight "dpkg-sig" | log_info
 
 	return 0
 }
 
 process_new_package() {
-	local buildid="$1"
+	local context="$1"
 	local package="$2"
 	local repo="$3"
 	local codename="$4"
 
 	local failed
+	local logoutput
 
 	failed=true
 
-	log_info "[#$buildid] New package: $package"
+	log_info "[#$context] New package: $package"
 
-	if ! verify_package "$package"; then
-		log_error "[#$buildid] Invalid signature on package $package"
-	elif ! repo_add_package "$repo" "$codename" "$package"; then
-		log_error "[#$buildid] Could not process $package"
+	if ! logoutput=$(verify_package "$package" 2>&1); then
+		log_error "[#$context] Invalid signature on package $package"
+	elif ! logoutput+=$(repo_add_package "$repo" "$codename" "$package" 2>&1); then
+		log_error "[#$context] Could not process $package"
 	else
-		log_info "[#$buildid] $package successfully added to $repo:$codename"
+		log_info "[#$context] $package successfully added to $repo:$codename"
 		failed=false
 	fi
 
 	if "$failed"; then
-		if ! mv "$package" "$repo/failed/."; then
-			log_error "[#$buildid] Could not move $package to $repo/failed/."
+		if ! log_output+=$(mv "$package" "$repo/failed/." 2>&1); then
+			log_error "[#$context] Could not move $package to $repo/failed/."
 		fi
 	else
-		if ! rm "$package"; then
-			log_error "[#$buildid] Could not remove $package"
+		if ! log_output+=$(rm "$package" 2>&1); then
+			log_error "[#$context] Could not remove $package"
 		fi
+	fi
+
+	if ! foundry_context_log "$context" "dist" <<< "$logoutput"; then
+		log_error "Could not log to dist log of $context"
+		return 1
 	fi
 
 	return 0
 }
 
+process_dist_request() {
+	local repo="$1"
+	local codename="$2"
+	local distreq="$3"
+	local endpoint="$4"
+	local topic="$5"
+
+	local artifacts
+	local artifact
+	local context
+
+	if ! context=$(foundry_msg_distrequest_get_context "$distreq"); then
+		log_warn "Dropping dist request without context"
+		return 1
+	fi
+
+	readarray -t artifacts < <(foundry_context_get_files "$context")
+
+	for artifact in "${artifacts[@]}"; do
+		process_new_package "$context" "$artifact" "$repo" "$codename"
+	done
+
+	return 0
+}
+
 watch_new_packages() {
-	local queue="$1"
-	local repo="$2"
-	local codename="$3"
+	local endpoint_name="$1"
+	local topic="$2"
+	local repo="$3"
+	local codename="$4"
+
+	local endpoint
+
+	if ! endpoint=$(ipc_endpoint_open "$endpoint_name"); then
+		log_error "Could not listen on IPC endpoint $endpoint_name"
+		return 1
+	fi
 
 	while inst_running; do
-		local workitem
-		local package
-		local buildid
+		local msg
+		local distreq
+		local msgtype
 
-		log_debug "Waiting on queue $queue"
+		inst_set_status "Waiting for dist requests"
 
-	        if ! workitem=$(queue_get_file "$queue" "$repo/incoming"); then
+		if ! msg=$(ipc_endpoint_recv "$endpoint" 5); then
 			continue
 		fi
 
-		read -r package buildid <<< "$workitem"
-		if [[ -z "$package" ]] || [[ -z "$buildid" ]]; then
-			log_error "Could not parse workitem: $workitem"
+		if ! distreq=$(ipc_msg_get_data "$msg"); then
+			log_warn "Dropping message without data"
 			continue
 		fi
 
-		process_new_package "$buildid" "$package" "$repo" "$codename"
+		if ! msgtype=$(foundry_msg_get_type "$distreq"); then
+			log_warn "Dropping message without type"
+			continue
+		fi
+
+		if [[ "$msgtype" != "distrequest" ]]; then
+			log_warn "Dropping message with unexpected type $msgtype"
+			continue
+		fi
+
+		process_dist_request "$repo" "$codename" "$distreq" \
+				     "$endpoint" "$topic"
 	done
 
 	return 0
@@ -154,19 +201,25 @@ looks_like_a_repository() {
 main() {
 	local path
 	local codename
-	local incoming
+	local endpoint
+	local topic
 	local name
 	local arch
 	local gpgkey
 	local desc
 
-	opt_add_arg "n" "name"        "rv" ""       "The name of the repository"
-	opt_add_arg "o" "output"      "rv" ""       "The path to the repository"
-	opt_add_arg "c" "codename"    "v"  "stable" "The codename of the distribution (default: stable)"
-	opt_add_arg "a" "arch"        "rv" ""       "Comma separated list of supported architectures"
-	opt_add_arg "k" "gpgkey"      "rv" ""       "The GPG key used for signing"
-	opt_add_arg "d" "description" "rv" ""       "Description of the repository"
-	opt_add_arg "i" "input"       "rv" ""       "The queue to watch for incoming packages"
+	opt_add_arg "e" "endpoint"    "v"  "pub/distbot" "The IPC endpoint to listen on"
+	opt_add_arg "t" "topic"       "v"  "dists"       "The topic to publish messages at"
+	opt_add_arg "n" "name"        "rv" ""            "The name of the repository"
+	opt_add_arg "o" "output"      "rv" ""            "The path to the repository"
+	opt_add_arg "c" "codename"    "v"  "stable"      \
+		    "The codename of the distribution (default: stable)"
+	opt_add_arg "a" "arch"        "rv" ""            \
+		    "Comma separated list of supported architectures"
+	opt_add_arg "k" "gpgkey"      "rv" ""            \
+		    "The GPG key used for signing"
+	opt_add_arg "d" "description" "rv" ""            \
+		    "Description of the repository"
 
 	if ! opt_parse "$@"; then
 		return 1
@@ -174,7 +227,8 @@ main() {
 
 	path=$(opt_get "output")
 	codename=$(opt_get "codename")
-	incoming=$(opt_get "input")
+	endpoint=$(opt_get "endpoint")
+	topic=$(opt_get "topic")
 	name=$(opt_get "name")
 	arch=$(opt_get "arch")
 	gpgkey=$(opt_get "gpgkey")
@@ -190,7 +244,7 @@ main() {
 		fi
 	fi
 
-	inst_start watch_new_packages "$incoming" "$path" "$codename"
+	inst_start watch_new_packages "$endpoint" "$topic" "$path" "$codename"
 
 	return 0
 }
