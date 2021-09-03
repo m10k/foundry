@@ -68,7 +68,8 @@ emit_testrequest() {
 	local repository
 	local branch
 	local commit
-	local tid
+	local context
+	local project
 
 	local testrequest
 
@@ -78,16 +79,23 @@ emit_testrequest() {
 		return 1
 	fi
 
-	if ! tid=$( false ); then
+	project="${repository##*/}"
+
+	if ! context=$(foundry_context_new "$project"); then
 		return 1
 	fi
 
-	if ! testrequest=$(foundry_msg_testrequest_new "$tid" \
+	log_debug "Created context $context for $project"
+
+	if ! testrequest=$(foundry_msg_testrequest_new "$context"    \
 						       "$repository" \
-						       "$branch" \
+						       "$branch"     \
 						       "$commit"); then
+		log_error "Could not make test request"
 		return 1
 	fi
+
+	log_debug "Sending test request $endpoint -> pub/testbot"
 
 	if ! ipc_endpoint_send "$endpoint" "pub/testbot" "$testrequest"; then
 		return 1
@@ -240,6 +248,8 @@ _handle_commit() {
 
 	case "$branch" in
 		"testing")
+			log_debug "Commit on \"testing\" branch -> sending test request"
+
 			if ! emit_testrequest "$endpoint" "$msg" \
 			                      "$repository" "$branch"; then
 				return 1
@@ -311,41 +321,36 @@ _handle_notification() {
 
 	local fmsg
 	local type
+	declare -A handlers
 
-	fmsg=$(foundry_msg_from_ipc_msg "$msg")
-	type="$?"
+	handlers["build"]=_handle_build
+	handlers["commit"]=_handle_commit
+	handlers["test"]=_handle_test
+	handlers["sign"]=_handle_sign
+	handlers["merge"]=_handle_merge
 
-	case "$type" in
-		"$__foundry_msg_type_build")
-			_handle_build "$endpoint" "$fmsg"
-			;;
+	if ! fmsg=$(ipc_msg_get_data "$msg"); then
+		log_warn "Dropping message without data"
+		return 1
+	fi
 
-		"$__foundry_msg_type_commit")
-			_handle_commit "$endpoint" "$fmsg"
-			;;
+	if ! type=$(foundry_msg_get_type "$fmsg"); then
+		log_warn "Dropping message without type"
+		return 1
+	fi
 
-		"$__foundry_msg_type_test")
-			_handle_test "$endpoint" "$fmsg"
-			;;
+	log_debug "Received $type message"
 
-		"$__foundry_msg_type_sign")
-			_handle_sign "$endpoint" "$fmsg"
-			;;
+	if ! array_contains "$type" "${!handlers[@]}"; then
+		log_warn "Unexpected message type: $type"
+		return 1
+	fi
 
-		"$__foundry_msg_type_merge")
-			_handle_merge "$endpoint" "$fmsg"
-			;;
+	log_debug "Message is handled by ${handlers[$type]}"
 
-		255)
-			log_warn "Invalid message received"
-			return 1
-			;;
-
-		*)
-			log_warn "Unexpected message type: $type"
-			return 1
-			;;
-	esac
+	if ! "${handlers[$type]}" "$endpoint" "$fmsg"; then
+		return 1
+	fi
 
 	return 0
 }
@@ -406,7 +411,7 @@ main() {
 		return 1
 	fi
 
-	if ! include "log" "opt" "ipc" "inst" "foundry/msg"; then
+	if ! include "log" "opt" "ipc" "inst" "foundry/msg" "foundry/context"; then
 		return 1
 	fi
 
