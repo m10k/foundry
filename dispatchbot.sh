@@ -170,40 +170,16 @@ emit_distrequest() {
 
 emit_mergerequest() {
 	local endpoint="$1"
-	local testmsg="$2"
+	local context="$2"
+	local repository="$3"
+	local srcbranch="$4"
+	local dstbranch="$5"
 
 	local mergerequest
-	local tid
-	local repository
-	local srcbranch
-	local dstbranch
-	local result
 
-	if ! result=$(foundry_msg_test_get_result "$testmsg"); then
-		return 1
-	fi
-
-	if (( result != 0 )); then
-		# Nothing to do
-		return 0
-	fi
-
-	if ! tid=$(foundry_msg_test_get_tid "$testmsg") ||
-	   ! repository=$(foundry_msg_test_get_repository "$testmsg") ||
-	   ! srcbranch=$(foundry_msg_test_get_branch "$testmsg"); then
-		return 1
-	fi
-
-	if [[ "$srcbranch" != "testing" ]]; then
-		# We only make mergerequests from testing to stable
-		return 0
-	fi
-
-	dstbranch="stable"
-
-	if ! mergerequest=$(foundry_msg_mergerequest_new "$tid" \
+	if ! mergerequest=$(foundry_msg_mergerequest_new "$context"    \
 							 "$repository" \
-							 "$srcbranch" \
+							 "$srcbranch"  \
 							 "$dstbranch"); then
 		return 1
 	fi
@@ -269,16 +245,45 @@ _handle_test() {
 	local endpoint="$1"
 	local msg="$2"
 
+	local context
+	local repository
 	local result
+	local branch
 
-	if ! result=$(foundry_msg_test_get_result "$msg"); then
+	if ! context=$(foundry_msg_test_get_context "$msg"); then
+		log_warn "Dropping test message without context"
 		return 1
 	fi
 
-	if (( result == 0 )); then
-		if ! emit_mergerequest "$endpoint" "$msg"; then
-			return 1
-		fi
+	if ! repository=$(foundry_msg_test_get_repository "$msg"); then
+		log_warn "Dropping test message without repository"
+		return 1
+	fi
+
+	if ! branch=$(foundry_msg_test_get_branch "$msg"); then
+		log_warn "Dropping test message for \"$repository\" without branch"
+		return 1
+	fi
+
+	if [[ "$branch" != "testing" ]]; then
+		log_info "Ignoring test result for \"$repository\", branch \"$branch\""
+		return 0
+	fi
+
+	if ! result=$(foundry_msg_test_get_result "$msg"); then
+		log_warn "Dropping test message for \"$repository\" without result"
+		return 1
+	fi
+
+	if (( result != 0 )); then
+		log_info "Ignoring test for \"$repository\" with result \"$result\""
+		return 0
+	fi
+
+	log_info "Sending merge request for \"$repository\""
+	if ! emit_mergerequest "$endpoint" "$context" "$repository" \
+	                       "testing" "stable"; then
+		return 1
 	fi
 
 	return 0
