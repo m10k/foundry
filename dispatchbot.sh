@@ -34,23 +34,16 @@ emit_signrequest() {
 
 emit_buildrequest() {
 	local endpoint="$1"
-	local mergemsg="$2"
+	local context="$2"
+	local repository="$3"
+	local branch="$4"
 
-	local context
-	local repository
-	local branch
 	local buildreq
 
-	if ! context=$(foundry_msg_merge_get_context "$mergemsg") ||
-	   ! repository=$(foundry_msg_merge_get_repository "$mergemsg") ||
-	   ! branch=$(foundry_msg_merge_get_destination_branch "$mergemsg"); then
-		log_error "Malformed merge message"
-		return 1
-	fi
-
-	if ! buildreq=$(foundry_msg_buildrequest_new "$context" \
+	if ! buildreq=$(foundry_msg_buildrequest_new "$context"    \
 						     "$repository" \
 						     "$branch"); then
+		log_error "Could not make build request"
 		return 1
 	fi
 
@@ -98,41 +91,6 @@ emit_testrequest() {
 	log_debug "Sending test request $endpoint -> pub/testbot"
 
 	if ! ipc_endpoint_send "$endpoint" "pub/testbot" "$testrequest"; then
-		return 1
-	fi
-
-	return 0
-}
-
-emit_buildrequest() {
-	local endpoint="$1"
-	local commitmsg="$2"
-
-	local repository
-	local branch
-	local commit
-	local tid
-
-	local buildrequest
-
-	if ! repository=$(foundry_msg_commit_get_repository "$commitmsg") ||
-	   ! branch=$(foundry_msg_commit_get_branch "$commitmsg") ||
-	   ! commit=$(foundry_msg_commit_get_commit "$commitmsg"); then
-		return 1
-	fi
-
-	if ! tid=$( false ); then
-		return 1
-	fi
-
-	if ! buildrequest=$(foundry_msg_buildrequest_new "$tid" \
-							 "$repository" \
-							 "$branch" \
-							 "$commit"); then
-		return 1
-	fi
-
-	if ! ipc_endpoint_send "$endpoint" "pub/buildbot" "$buildrequest"; then
 		return 1
 	fi
 
@@ -304,17 +262,39 @@ _handle_merge() {
 	local endpoint="$1"
 	local msg="$2"
 
+	local context
+	local repository
 	local branch
+	local accepted_branches
 
-	if ! branch=$(foundry_msg_merge_get_destination_branch "$msg"); then
-		log_error "Malformed message"
-		return 1
+	accepted_branches=(
+		"master"
+		"stable"
+	)
+
+	if ! context=$(foundry_msg_merge_get_context "$msg"); then
+		log_warn "Dropping merge message without context"
+		return 0
 	fi
 
-	if [[ "$branch" == "master" ]] || [[ "$branch" == "stable" ]]; then
-		if ! emit_buildrequest "$endpoint" "$msg"; then
-			return 1
-		fi
+	if ! repository=$(foundry_msg_merge_get_repository "$msg"); then
+		log_warn "Dropping merge message without repository (context $context)"
+		return 0
+	fi
+
+	if ! branch=$(foundry_msg_merge_get_destination_branch "$msg"); then
+		log_warn "Dropping merge message for $context@$repository without destination branch"
+		return 0
+	fi
+
+	if ! array_contains "$branch" "${accepted_branches[@]}"; then
+		log_info "Ignoring merge message for $context@$repository#$branch"
+		return 0
+	fi
+
+	if ! emit_buildrequest "$endpoint" "$context" "$repository" "$branch"; then
+		log_error "Could not send build request for $repository#$branch"
+		return 1
 	fi
 
 	return 0
