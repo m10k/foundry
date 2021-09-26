@@ -2,30 +2,26 @@
 
 emit_signrequest() {
 	local endpoint="$1"
-	local buildmsg="$2"
+	local context="$2"
+	local artifacts=("${@:3}")
 
 	local signrequest
-	local artifacts
-	local artifact
-	local have_artifacts
+	local dst
 
-	artifacts=()
-	have_artifacts=false
+	dst="pub/signbot"
 
-	while read -r artifact; do
-		artifacts+=("$artifact")
-		have_artifacts=true
-	done < <(foundry_msg_build_get_artifacts "$buildmsg")
-
-	if ! "$have_artifacts"; then
+	if (( ${#artifacts[@]} == 0 )); then
+		log_warn "Nothing to be signed for $context"
 		return 1
 	fi
 
-	if ! signrequest=$(foundry_msg_signrequest_new "$tid" "${artifacts[@]}"); then
+	if ! signrequest=$(foundry_msg_signrequest_new "$context" "${artifacts[@]}"); then
+		log_error "Could not make sign request for $context"
 		return 1
 	fi
 
-	if ! ipc_endpoint_send "$endpoint" "pub/signbot" "$signrequest"; then
+	if ! ipc_endpoint_send "$endpoint" "$dst" "$signrequest"; then
+		log_error "Could not send signrequest to $dst"
 		return 1
 	fi
 
@@ -153,17 +149,38 @@ _handle_build() {
 	local endpoint="$1"
 	local msg="$2"
 
+	local context
+	local artifacts
+	local artifact
 	local result
 
+	artifacts=()
+
+	if ! context=$(foundry_msg_build_get_context "$msg"); then
+		log_warn "Dropping message without context"
+		return 0
+	fi
+
 	if ! result=$(foundry_msg_build_get_result "$msg"); then
+		log_warn "Dropping message without result"
+		return 0
+	fi
+
+	if (( result != 0 )); then
+		log_warn "Not emitting sign request for failed build $context"
+		return 0
+	fi
+
+	while read -r artifact; do
+		artifacts+=("$artifact")
+	done < <(foundry_msg_build_get_artifacts "$msg")
+
+	if ! emit_signrequest "$endpoint" "$context" "${artifacts[@]}"; then
+		log_error "Could not emit sign request for $context"
 		return 1
 	fi
 
-	if (( result == 0 )); then
-		if ! emit_signrequest "$msg"; then
-			return 1
-		fi
-	fi
+	log_info "Sign request for $context emitted."
 
 	return 0
 }
