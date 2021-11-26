@@ -139,7 +139,7 @@ send_notification() {
 	local endpoint="$1"
 	local topic="$2"
 	local watch="$3"
-	local commit="$4"
+	local ref="$4"
 
 	local repository
 	local branch
@@ -147,7 +147,7 @@ send_notification() {
 
 	repository=$(watch_to_repository "$watch")
 	branch=$(watch_to_branch "$watch")
-	msg=$(foundry_msg_commit_new "$repository" "$branch" "$commit")
+	msg=$(foundry_msg_commit_new "$repository" "$branch" "$ref")
 
 	if ! ipc_endpoint_publish "$endpoint" "$topic" "$msg"; then
 		return 1
