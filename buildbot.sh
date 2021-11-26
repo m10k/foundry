@@ -67,7 +67,8 @@ send_build_notification() {
 	local context="$3"
 	local repository="$4"
 	local branch="$5"
-	local result="$6"
+	local ref="$6"
+	local result="$7"
 
 	local buildmsg
 
@@ -86,34 +87,56 @@ send_build_notification() {
 	return 0
 }
 
-handle_build_request() {
+handle_commit_message() {
 	local endpoint="$1"
-	local topic="$2"
-	local request="$3"
+	local publish_to="$2"
+	local commit="$3"
 
-	local context
+	local buildable_branches
 	local repository
 	local branch
+	local ref
+	local context_name
+	local context
 	local builddir
-	local result
-	local err
+	local -i result
+	local -i err
 
-	if ! context=$(foundry_msg_buildrequest_get_context "$request"); then
-		log_warn "No context in buildrequest. Dropping."
+	buildable_branches=(
+		"master"
+		"stable"
+	)
+	result=0
+	err=0
+
+	if ! branch=$(foundry_msg_commit_get_branch "$commit"); then
+		log_warn "No branch in commit message"
+		return 1
+	fi
+
+	if ! array_contains "$branch" "${buildable_branches[@]}"; then
+		log_warn "Refusing to build from $branch branch"
+		return 0
+	fi
+
+	if ! repository=$(foundry_msg_commit_get_repository "$commit"); then
+		log_warn "No repository in commit message"
+		return 1
+	fi
+
+	if ! ref=$(foundry_msg_commit_get_ref "$commit"); then
+		log_warn "No ref in commit message"
+		return 1
+	fi
+
+	context_name="${repository##*/}"
+
+	if ! context=$(foundry_context_new "$context_name"); then
+		log_error "Could not create a context for $context_name"
 		return 1
 	fi
 
 	inst_set_status "Building $context"
-
-	if ! repository=$(foundry_msg_buildrequest_get_repository "$request"); then
-		log_warn "No repository in buildrequest. Dropping."
-		return 1
-	fi
-
-	if ! branch=$(foundry_msg_buildrequest_get_branch "$request"); then
-		log_warn "No branch in buildrequest. Dropping."
-		return 1
-	fi
 
 	if ! builddir=$(mktemp -d); then
 		log_error "Could not make temporary build directory"
@@ -121,19 +144,15 @@ handle_build_request() {
 	fi
 
 	log_info "Building $context in $builddir"
-	if ! build "$context" "$repository" "$branch" "$builddir"; then
+	if ! build "$context" "$repository" "$ref" "$builddir"; then
 		result=1
-	else
-		result=0
 	fi
 
 	log_info "Finished build of $context with status $result"
 
-	if ! send_build_notification "$endpoint" "$topic" "$context" \
-	                             "$repository" "$branch" "$result"; then
+	if ! send_build_notification "$endpoint" "$publish_to" "$context" \
+	                             "$repository" "$branch" "$ref" "$result"; then
 		err=1
-	else
-		err=0
 	fi
 
 	if ! rm -rf "$builddir"; then
@@ -165,7 +184,7 @@ dispatch_tasks() {
 		local data
 		local msgtype
 
-		inst_set_status "Awaiting build requests"
+		inst_set_status "Awaiting commit messages"
 
 		if ! msg=$(ipc_endpoint_recv "$endpoint" 5); then
 			continue
@@ -177,14 +196,14 @@ dispatch_tasks() {
 		fi
 
 		if ! msgtype=$(foundry_msg_get_type "$data") ||
-		   [[ "$msgtype" != "buildrequest" ]]; then
+		   [[ "$msgtype" != "commit" ]]; then
 			log_warn "Dropping message with unexpected type"
 			continue
 		fi
 
-		inst_set_status "Build request received"
+		inst_set_status "Handling commit message"
 
-		handle_build_request "$endpoint" "$publish_to" "$data"
+		handle_commit_message "$endpoint" "$publish_to" "$data"
 	done
 
 	return 0
