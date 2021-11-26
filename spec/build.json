@@ -21,6 +21,12 @@
 	    "type": "string"
 	},
 
+	"ref": {
+	    "description": "Identifier of the source code version",
+	    "type": "string",
+	    "pattern": "^[0-9a-fA-F]+$"
+	},
+
 	"artifacts": {
 	    "description": "The files resulting from the build",
 	    "type": "array",
@@ -35,6 +41,7 @@
 	"context",
 	"repository",
 	"branch",
+	"ref",
 	"artifacts"
     ],
 
