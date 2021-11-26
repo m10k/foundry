@@ -13,7 +13,10 @@ __init() {
 foundry_msg_sign_new() {
 	local context="$1"
 	local key="$2"
-	local artifacts=("${@:3}")
+	local repository="$3"
+	local branch="$4"
+	local ref="$5"
+	local artifacts=("${@:6}")
 
 	local artifacts_json
 	local json
@@ -23,9 +26,12 @@ foundry_msg_sign_new() {
 		return 1
 	fi
 
-	if ! json=$(json_object "context"   "$context"       \
-				"key"       "$key"           \
-				"artifacts" "$artifacts_json"); then
+	if ! json=$(json_object "context"    "$context"      \
+				"key"        "$key"          \
+				"repository" "$repository"   \
+				"branch"     "$branch"       \
+				"ref"        "$ref"          \
+				"artifacts"  "$artifacts_json"); then
 		return 1
 	fi
 
@@ -60,6 +66,45 @@ foundry_msg_sign_get_key() {
 	fi
 
 	echo "$key"
+	return 0
+}
+
+foundry_msg_sign_get_repository() {
+	local msg="$1"
+
+	local repository
+
+	if ! repository=$(foundry_msg_get_data_field "$msg" "repository"); then
+		return 1
+	fi
+
+	echo "$repository"
+	return 0
+}
+
+foundry_msg_sign_get_branch() {
+	local msg="$1"
+
+	local branch
+
+	if ! branch=$(foundry_msg_get_data_field "$msg" "branch"); then
+		return 1
+	fi
+
+	echo "$branch"
+	return 0
+}
+
+foundry_msg_sign_get_ref() {
+	local msg="$1"
+
+	local ref
+
+	if ! ref=$(foundry_msg_get_data_field "$msg" "ref"); then
+		return 1
+	fi
+
+	echo "$ref"
 	return 0
 }
 

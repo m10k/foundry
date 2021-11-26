@@ -10,6 +10,23 @@
 	    "type": "string"
 	},
 
+        "repository": {
+            "description": "The URL of the repository that the artifacts were built from",
+            "type": "string",
+            "pattern": "^(https|file)://.*$"
+        },
+
+        "branch": {
+            "description": "The name of the branch the artifacts were built from",
+            "type": "string"
+        },
+
+        "ref": {
+            "description": "Identifier of the source code version",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]+$"
+        },
+
 	"artifacts": {
 	    "description": "The files that have been signed",
 	    "type": "array",
@@ -27,6 +44,9 @@
 
     "required": [
 	"context",
+	"repository",
+	"branch",
+	"ref",
 	"artifacts",
 	"key"
     ],
