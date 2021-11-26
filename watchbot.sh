@@ -203,12 +203,12 @@ _watch() {
 main() {
 	local watchlist
 	local interval
-	local topic
+	local publish_to
 
 	opt_add_arg "r" "repository" "rv" ""          \
 		    "Repository to watch for updates" \
 		    "" _add_to_watchlist
-	opt_add_arg "t" "topic"      "v"  "commits"   \
+	opt_add_arg "p" "publish-to" "v"  "commits"   \
 		    "Topic to publish notifications"
 	opt_add_arg "i" "interval"   "v"  30          \
 		    "Update check interval" "^[0-9]+$"
@@ -219,10 +219,10 @@ main() {
 		return 1
 	fi
 
-	topic=$(opt_get "topic")
+	publish_to=$(opt_get "publish-to")
 	interval=$(opt_get "interval")
 
-	inst_start _watch "$topic" "$interval" "${watchlist[@]}"
+	inst_start _watch "$publish_to" "$interval" "${watchlist[@]}"
 
 	return 0
 }
