@@ -13,14 +13,14 @@ __init() {
 foundry_msg_commit_new() {
 	local repository="$1"
 	local branch="$2"
-	local commit="$3"
+	local ref="$3"
 
 	local data
 	local msg
 
 	if ! data=$(json_object "repository" "$repository" \
-				"commit"     "$commit"     \
-				"branch"     "$branch"); then
+				"branch"     "$branch"     \
+	                        "ref"        "$ref"); then
 		return 1
 	fi
 
@@ -58,15 +58,15 @@ foundry_msg_commit_get_branch() {
 	return 0
 }
 
-foundry_msg_commit_get_commit() {
+foundry_msg_commit_get_ref() {
 	local msg="$1"
 
-	local commit
+	local ref
 
-	if ! commit=$(foundry_msg_get_data_field "$msg" "commit"); then
+	if ! ref=$(foundry_msg_get_data_field "$msg" "ref"); then
 		return 1
 	fi
 
-	echo "$commit"
+	echo "$ref"
 	return 0
 }

@@ -16,8 +16,8 @@
 	    "type": "string"
 	},
 
-	"commit": {
-	    "description": "The hash of the detected commit",
+	"ref": {
+	    "description": "Identifier of the source code version",
 	    "type": "string",
 	    "pattern": "^[0-9a-fA-F]+$"
 	}
@@ -26,6 +26,6 @@
     "required": [
 	"repository",
 	"commit",
-	"branch"
+	"ref"
     ]
 }
