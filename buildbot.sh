@@ -26,6 +26,7 @@ build() {
 	local err
 
 	err=0
+
 	if ! output=$(git clone "$repository" -b "$branch" "$builddir/sources" 2>&1); then
 		err=1
 	fi
@@ -144,12 +145,18 @@ handle_build_request() {
 
 dispatch_tasks() {
 	local endpoint_name="$1"
-	local topic="$2"
+	local watch="$2"
+	local publish_to="$3"
 
 	local endpoint
 
 	if ! endpoint=$(ipc_endpoint_open "$endpoint_name"); then
 		log_error "Could not open endpoint $endpoint_name"
+		return 1
+	fi
+
+	if ! ipc_endpoint_subscribe "$endpoint" "$watch"; then
+		log_error "Could not subscribe to $watch"
 		return 1
 	fi
 
@@ -177,7 +184,7 @@ dispatch_tasks() {
 
 		inst_set_status "Build request received"
 
-		handle_build_request "$endpoint" "$topic" "$data"
+		handle_build_request "$endpoint" "$publish_to" "$data"
 	done
 
 	return 0
@@ -185,19 +192,22 @@ dispatch_tasks() {
 
 main() {
 	local endpoint
-	local topic
+	local watch
+	local publish_to
 
-	opt_add_arg "e" "endpoint" "v" "pub/buildbot" "The IPC endpoint to listen on"
-	opt_add_arg "t" "topic"    "v" "builds"       "The topic to publish builds under"
+	opt_add_arg "e" "endpoint"   "v" "pub/buildbot" "The IPC endpoint to listen on"
+	opt_add_arg "w" "watch"      "v" "commits"      "The topic to watch for commit messages"
+	opt_add_arg "p" "publish-to" "v" "builds"       "The topic to publish builds under"
 
 	if ! opt_parse "$@"; then
 		return 1
 	fi
 
 	endpoint=$(opt_get "endpoint")
-	topic=$(opt_get "topic")
+	watch=$(opt_get "watch")
+	publish_to=$(opt_get "publish-to")
 
-	if ! inst_start dispatch_tasks "$endpoint" "$topic"; then
+	if ! inst_start dispatch_tasks "$endpoint" "$watch" "$publish_to"; then
 		return 1
 	fi
 
