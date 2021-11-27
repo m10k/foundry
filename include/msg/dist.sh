@@ -13,7 +13,10 @@ __init() {
 foundry_msg_dist_new() {
 	local context="$1"
 	local repository="$2"
-	local artifacts=("${@:3}")
+	local branch="$3"
+	local ref="$4"
+	local distribution="$5"
+	local artifacts=("${@:6}")
 
 	local artifacts_json
 	local json
@@ -23,9 +26,12 @@ foundry_msg_dist_new() {
 		return 1
 	fi
 
-        if ! json=$(json_object "context"    "$context"       \
-				"repository" "$repository"    \
-				"artifacts"  "$artifacts_json"); then
+	if ! json=$(json_object "context"      "$context"      \
+	                        "repository"   "$repository"   \
+	                        "branch"       "$branch"       \
+	                        "ref"          "$ref"          \
+	                        "distribution" "$distribution" \
+	                        "artifacts"    "$artifacts_json"); then
 		return 1
 	fi
 
@@ -60,6 +66,45 @@ foundry_msg_dist_get_repository() {
 	fi
 
 	echo "$repository"
+	return 0
+}
+
+foundry_msg_dist_get_branch() {
+	local msg="$1"
+
+	local branch
+
+	if ! branch=$(foundry_msg_get_data_field "$msg" "branch"); then
+		return 1
+	fi
+
+	echo "$branch"
+	return 0
+}
+
+foundry_msg_dist_get_ref() {
+	local msg="$1"
+
+	local ref
+
+	if ! ref=$(foundry_msg_get_data_field "$msg" "ref"); then
+		return 1
+	fi
+
+	echo "$ref"
+	return 0
+}
+
+foundry_msg_dist_get_distribution() {
+	local msg="$1"
+
+	local distribution
+
+	if ! distribution=$(foundry_msg_get_data_field "$msg" "distribution"); then
+		return 1
+	fi
+
+	echo "$distribution"
 	return 0
 }
 

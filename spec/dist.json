@@ -10,6 +10,23 @@
 	    "type": "string"
 	},
 
+	"repository": {
+            "description": "The URL of the repository that the artifacts were built from",
+            "type": "string",
+            "pattern": "^(https|file)://.*$"
+        },
+
+        "branch": {
+            "description": "The name of the branch the artifacts were built from",
+            "type": "string"
+        },
+
+        "ref": {
+            "description": "Identifier of the source code version",
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]+$"
+        },
+
 	"artifacts": {
 	    "description": "Artifacts that were published",
 	    "type": "array",
@@ -19,7 +36,7 @@
 	    "minItems": 1
 	},
 
-	"repository": {
+	"distribution": {
 	    "description": "The repository where the artifacts were published",
 	    "type": "string"
 	}
@@ -27,8 +44,11 @@
 
     "required": [
 	"context",
+	"repository",
+	"branch",
+	"ref",
 	"artifacts",
-	"repository"
+	"distribution"
     ],
 
     "$defs": {
