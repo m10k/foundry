@@ -5,11 +5,6 @@
     "type":    "object",
 
     "properties": {
-	"context": {
-	    "description": "Context identifier of this transaction",
-	    "type": "string"
-	},
-
 	"repository": {
             "description": "The URL of the repository that the artifacts were built from",
             "type": "string",
@@ -43,7 +38,6 @@
     },
 
     "required": [
-	"context",
 	"repository",
 	"branch",
 	"ref",
