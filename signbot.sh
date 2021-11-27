@@ -5,11 +5,17 @@ publish_results() {
 	local topic="$2"
 	local key="$3"
 	local context="$4"
-	local result="$5"
+	local repository="$5"
+	local branch="$6"
+	local ref="$7"
 
 	local sign
 
-	if ! sign=$(foundry_msg_sign_new "$context" "$key"); then
+	if ! sign=$(foundry_msg_sign_new "$context" \
+					 "$key" \
+					 "$repository" \
+					 "$branch" \
+					 "$ref"); then
 		log_error "Could not make sign message"
 		return 1
 	fi
@@ -22,19 +28,39 @@ publish_results() {
 	return 0
 }
 
-handle_sign_request() {
+handle_build_message() {
 	local endpoint="$1"
-	local topic="$2"
-	local request="$3"
+	local publish_to="$2"
+	local buildmsg="$3"
 	local signer_key="$4"
 
+	local repository
+	local branch
+	local ref
+	local context_name
 	local context
 	local artifact
 	local signlog
 	local result
 
-	if ! context=$(foundry_msg_signrequest_get_context "$request"); then
-		log_warn "No context in sign request. Dropping."
+	if ! result=$(foundry_msg_build_get_result "$buildmsg")         ||
+	   ! repository=$(foundry_msg_build_get_repository "$buildmsg") ||
+	   ! branch=$(foundry_msg_build_get_branch "$buildmsg")         ||
+	   ! ref=$(foundry_msg_build_get_ref "$buildmsg"); then
+		log_warn "Malformed build message. Dropping."
+		return 1
+	fi
+
+	if ! is_digits "$result" ||
+	   (( result != 0 )); then
+		log_warn "Refusing to sign failed build"
+		return 1
+	fi
+
+	context_name="${repository##*/}"
+
+	if ! context=$(foundry_context_new "$context_name"); then
+		log_error "Could not make new context for $context_name"
 		return 1
 	fi
 
@@ -60,9 +86,11 @@ handle_sign_request() {
 		log_error "Could not log to context $context"
 	fi
 
-	if ! publish_results "$endpoint" "$topic" "$signer_key" \
-	                     "$context" "$result"; then
-		log_error "Could not publish results at $topic"
+	if ! publish_results "$endpoint" "$publish_to" \
+	                     "$signer_key" "$context"  \
+	                     "$repository" "$branch"   \
+	                     "$ref"; then
+		log_error "Could not publish results to $publish_to"
 		return 1
 	fi
 
@@ -71,8 +99,9 @@ handle_sign_request() {
 
 dispatch_tasks() {
 	local endpoint_name="$1"
-	local topic="$2"
-	local signer_key="$3"
+	local watch="$2"
+	local publish_to="$3"
+	local signer_key="$4"
 
 	local endpoint
 
@@ -81,12 +110,17 @@ dispatch_tasks() {
 		return 1
 	fi
 
+	if ! ipc_endpoint_subscribe "$endpoint" "$watch"; then
+		log_error "Could not subscribe to $watch"
+		return 1
+	fi
+
 	while inst_running; do
 		local msg
 		local data
 		local msgtype
 
-		inst_set_status "Awaiting sign requests"
+		inst_set_status "Watching for build messages"
 
 		if ! msg=$(ipc_endpoint_recv "$endpoint" 5); then
 			continue
@@ -98,13 +132,13 @@ dispatch_tasks() {
 		fi
 
 		if ! msgtype=$(foundry_msg_get_type "$data") ||
-		   [[ "$msgtype" != "signrequest" ]]; then
+		   [[ "$msgtype" != "build" ]]; then
 			log_warn "Received message with unexpected type. Dropping."
 			continue
 		fi
 
-		inst_set_status "Sign request received"
-		handle_sign_request "$endpoint" "$topic" "$data" "$signer_key"
+		inst_set_status "Handling build message"
+		handle_build_message "$endpoint" "$publish_to" "$data" "$signer_key"
 	done
 
 	return 0
@@ -112,22 +146,25 @@ dispatch_tasks() {
 
 main() {
 	local endpoint
-	local topic
+	local watch
+	local publish_to
 	local key
 
-	opt_add_arg "e" "endpoint" "v"  "pub/signbot" "The IPC endpoint to listen on"
-	opt_add_arg "t" "topic"    "v"  "signs"       "The topic to publish signs under"
-	opt_add_arg "k" "key"      "rv" ""            "Fingerprint of the key to sign with"
+	opt_add_arg "e" "endpoint"   "v"  "pub/signbot" "The IPC endpoint to listen on"
+	opt_add_arg "w" "watch"      "v"  "builds"      "The topic to watch for build messages"
+	opt_add_arg "p" "publish-to" "v"  "signs"       "The topic to publish signs under"
+	opt_add_arg "k" "key"        "rv" ""            "Fingerprint of the key to sign with"
 
 	if ! opt_parse "$@"; then
 		return 1
 	fi
 
 	endpoint=$(opt_get "endpoint")
-	topic=$(opt_get "topic")
+	watch=$(opt_get "watch")
+	publish_to=$(opt_get "publish-to")
 	key=$(opt_get "key")
 
-	if ! inst_start dispatch_tasks "$endpoint" "$topic" "$key"; then
+	if ! inst_start dispatch_tasks "$endpoint" "$watch" "$publish_to" "$key"; then
 		return 1
 	fi
 
@@ -139,7 +176,7 @@ main() {
 		exit 1
 	fi
 
-	if ! include "log" "opt" "inst" "ipc" "foundry/context" "foundry/msg"; then
+	if ! include "is" "log" "opt" "inst" "ipc" "foundry/context" "foundry/msg"; then
 		exit 1
 	fi
 
