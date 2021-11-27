@@ -113,36 +113,93 @@ process_new_package() {
 	return 0
 }
 
-process_dist_request() {
+publish_result() {
+	local endpoint="$1"
+	local publish_to="$2"
+	local repository="$3"
+	local branch="$4"
+	local ref="$5"
+	local distribution="$6"
+	local artifacts=("${@:7}")
+
+	local message
+
+	if ! message=$(foundry_msg_dist_new "$repository"   \
+					    "$branch"       \
+					    "$ref"          \
+					    "$distribution" \
+					    "${artifacts[@]}"); then
+		log_error "Could not make dist message"
+		return 1
+	fi
+
+	if ! ipc_endpoint_publish "$endpoint" "$publish_to" "$message"; then
+		log_error "Could not publish message to $publish_to"
+		return 1
+	fi
+
+	return 0
+}
+
+process_sign_message() {
 	local repo="$1"
 	local codename="$2"
-	local distreq="$3"
+	local signmsg="$3"
 	local endpoint="$4"
-	local topic="$5"
+	local publish_to="$5"
 
 	local artifacts
 	local artifact
 	local context
+	local repository
+	local branch
+	local ref
+	local distributed
 
-	if ! context=$(foundry_msg_distrequest_get_context "$distreq"); then
-		log_warn "Dropping dist request without context"
+	distributed=()
+
+	if ! repository=$(foundry_msg_sign_get_repository "$signmsg") ||
+	   ! branch=$(foundry_msg_sign_get_branch "$signmsg")         ||
+	   ! ref=$(foundry_msg_sign_get_ref "$signmsg")               ||
+	   ! context=$(foundry_msg_sign_get_context "$signmsg"); then
+		log_warn "Dropping malformed message"
 		return 1
 	fi
 
 	readarray -t artifacts < <(foundry_context_get_files "$context")
 
 	for artifact in "${artifacts[@]}"; do
-		process_new_package "$context" "$artifact" "$repo" "$codename"
+		local artifact_name
+
+		artifact_name="${artifact##*/}"
+
+		if process_new_package "$context" "$artifact" "$repo" "$codename"; then
+			distributed+=("$artifact_name")
+		else
+			log_error "Could not distribute $artifact_name"
+		fi
 	done
+
+	if (( ${#distributed[@]} == 0 )); then
+		log_error "No artifacts distributed"
+		return 1
+	fi
+
+	if ! publish_result "$endpoint" "$publish_to" "$repository" "$branch" \
+	                    "$ref" "$repo" "${distributed[@]}"; then
+		log_error "Failed to publish results for $context"
+		return 1
+	fi
 
 	return 0
 }
 
 watch_new_packages() {
 	local endpoint_name="$1"
-	local topic="$2"
-	local repo="$3"
-	local codename="$4"
+	local watch="$2"
+	local publish_to="$3"
+	local repo="$4"
+	local codename="$5"
 
 	local endpoint
 
@@ -151,34 +208,39 @@ watch_new_packages() {
 		return 1
 	fi
 
+	if ! ipc_endpoint_subscribe "$endpoint" "$watch"; then
+		log_error "Could not subscribe to $watch"
+		return 1
+	fi
+
 	while inst_running; do
 		local msg
-		local distreq
+		local signmsg
 		local msgtype
 
-		inst_set_status "Waiting for dist requests"
+		inst_set_status "Waiting for sign messages"
 
 		if ! msg=$(ipc_endpoint_recv "$endpoint" 5); then
 			continue
 		fi
 
-		if ! distreq=$(ipc_msg_get_data "$msg"); then
+		if ! signmsg=$(ipc_msg_get_data "$msg"); then
 			log_warn "Dropping message without data"
 			continue
 		fi
 
-		if ! msgtype=$(foundry_msg_get_type "$distreq"); then
+		if ! msgtype=$(foundry_msg_get_type "$signmsg"); then
 			log_warn "Dropping message without type"
 			continue
 		fi
 
-		if [[ "$msgtype" != "distrequest" ]]; then
+		if [[ "$msgtype" != "sign" ]]; then
 			log_warn "Dropping message with unexpected type $msgtype"
 			continue
 		fi
 
-		process_dist_request "$repo" "$codename" "$distreq" \
-				     "$endpoint" "$topic"
+		process_sign_message "$repo" "$codename" "$signmsg" \
+		                     "$endpoint" "$publish_to"
 	done
 
 	return 0
@@ -202,14 +264,19 @@ main() {
 	local path
 	local codename
 	local endpoint
-	local topic
+	local watch
+	local publish_to
 	local name
 	local arch
 	local gpgkey
 	local desc
 
 	opt_add_arg "e" "endpoint"    "v"  "pub/distbot" "The IPC endpoint to listen on"
-	opt_add_arg "t" "topic"       "v"  "dists"       "The topic to publish messages at"
+	opt_add_arg "w" "watch"       "v"  "signs"       \
+		    "The topic to watch for sign messages"
+	opt_add_arg "p" "publish-to"  "v"  "dists"       \
+		    "The topic to publish dist messages under"
+
 	opt_add_arg "n" "name"        "rv" ""            "The name of the repository"
 	opt_add_arg "o" "output"      "rv" ""            "The path to the repository"
 	opt_add_arg "c" "codename"    "v"  "stable"      \
@@ -228,7 +295,8 @@ main() {
 	path=$(opt_get "output")
 	codename=$(opt_get "codename")
 	endpoint=$(opt_get "endpoint")
-	topic=$(opt_get "topic")
+	watch=$(opt_get "watch")
+	publish_to=$(opt_get "publish-to")
 	name=$(opt_get "name")
 	arch=$(opt_get "arch")
 	gpgkey=$(opt_get "gpgkey")
@@ -244,7 +312,7 @@ main() {
 		fi
 	fi
 
-	inst_start watch_new_packages "$endpoint" "$topic" "$path" "$codename"
+	inst_start watch_new_packages "$endpoint" "$watch" "$publish_to" "$path" "$codename"
 
 	return 0
 }
