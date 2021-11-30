@@ -41,7 +41,7 @@ build() {
 		return 1
 	fi
 
-	if ! output=$(cd "$builddir/sources" && make deb 2>&1); then
+	if ! output=$(cd "$builddir/sources" && dpkg-buildpackage --no-sign 2>&1); then
 		err=1
 	fi
 
