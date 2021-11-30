@@ -322,7 +322,7 @@ main() {
 		exit 1
 	fi
 
-	if ! include "log" "opt" "queue" "inst"; then
+	if ! include "log" "opt" "queue" "inst" "ipc"; then
 		exit 1
 	fi
 
