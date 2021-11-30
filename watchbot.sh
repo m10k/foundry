@@ -172,7 +172,9 @@ _watch() {
 	while inst_running; do
 		local watch
 
+		inst_set_status "Checking ${#watchlist[@]} repositories for updates"
 		log_info "Checking ${#watchlist[@]} repositories for updates"
+
 		fetch_heads new_heads "${watchlist[@]}"
 
 		for watch in "${watchlist[@]}"; do
@@ -194,6 +196,7 @@ _watch() {
 			fi
 		done
 
+		inst_set_status "Sleeping for $interval seconds"
 		sleep "$interval"
 	done
 
