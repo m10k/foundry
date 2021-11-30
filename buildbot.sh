@@ -27,7 +27,8 @@ build() {
 
 	err=0
 
-	if ! output=$(git clone "$repository" -b "$branch" "$builddir/sources" 2>&1); then
+	if ! output=$(git clone "$repository" "$builddir/sources" 2>&1) ||
+	   ! output+=$(cd "$builddir/sources" 2>&1 && git checkout "$branch" 2>&1); then
 		err=1
 	fi
 
