@@ -53,7 +53,7 @@ handle_build_message() {
 
 	if ! is_digits "$result" ||
 	   (( result != 0 )); then
-		log_warn "Refusing to sign failed build"
+		log_warn "Not signing $repository#$branch [$ref] (build result was $result)"
 		return 1
 	fi
 
