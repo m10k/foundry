@@ -166,12 +166,19 @@ process_sign_message() {
 		return 1
 	fi
 
-	readarray -t artifacts < <(foundry_context_get_files "$context")
+	readarray -t artifacts < <(foundry_context_get_files "$context" "signed")
 
 	for artifact in "${artifacts[@]}"; do
 		local artifact_name
+		local extension
 
 		artifact_name="${artifact##*/}"
+		extension="${artifact_name##*.}"
+
+		if [[ "$extension" != "deb" ]]; then
+			log_debug "Skipping non-deb artifact $artifact_name"
+			continue
+		fi
 
 		if process_new_package "$context" "$artifact" "$repo" "$codename"; then
 			distributed+=("$artifact_name")
