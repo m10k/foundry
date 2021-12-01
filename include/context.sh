@@ -82,7 +82,7 @@ foundry_context_add_file() {
 		return 1
 	fi
 
-	if ! mv "$file" "$file_path/."; then
+	if ! cp "$file" "$file_path/."; then
 		return 1
 	fi
 
@@ -128,7 +128,7 @@ foundry_context_add_log() {
 		return 1
 	fi
 
-	if ! mv "$log" "$logdir/."; then
+	if ! cp "$log" "$logdir/."; then
 		return 1
 	fi
 
