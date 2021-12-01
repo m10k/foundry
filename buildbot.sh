@@ -72,9 +72,16 @@ send_build_notification() {
 	local result="$7"
 
 	local buildmsg
+	local artifacts
 
-	if ! buildmsg=$(foundry_msg_build_new "$context" "$repository" \
-					      "$branch" "$result"); then
+	artifacts=()
+
+	if ! buildmsg=$(foundry_msg_build_new "$context"    \
+					      "$repository" \
+					      "$branch"     \
+					      "$ref"        \
+					      "$result"     \
+					      artifacts); then
 		log_error "Could not make build message"
 		return 1
 	fi
