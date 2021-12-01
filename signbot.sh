@@ -11,10 +11,10 @@ publish_results() {
 
 	local sign
 
-	if ! sign=$(foundry_msg_sign_new "$context" \
-					 "$key" \
+	if ! sign=$(foundry_msg_sign_new "$context"    \
+					 "$key"        \
 					 "$repository" \
-					 "$branch" \
+					 "$branch"     \
 					 "$ref"); then
 		log_error "Could not make sign message"
 		return 1
@@ -37,6 +37,7 @@ handle_build_message() {
 	local repository
 	local branch
 	local ref
+	local build_context
 	local context_name
 	local context
 	local artifact
@@ -46,7 +47,8 @@ handle_build_message() {
 	if ! result=$(foundry_msg_build_get_result "$buildmsg")         ||
 	   ! repository=$(foundry_msg_build_get_repository "$buildmsg") ||
 	   ! branch=$(foundry_msg_build_get_branch "$buildmsg")         ||
-	   ! ref=$(foundry_msg_build_get_ref "$buildmsg"); then
+	   ! ref=$(foundry_msg_build_get_ref "$buildmsg")               ||
+	   ! build_context=$(foundry_msg_build_get_context "$buildmsg"); then
 		log_warn "Malformed build message. Dropping."
 		return 1
 	fi
@@ -79,22 +81,38 @@ handle_build_message() {
 					 "$artifact" 2>&1); then
 			log_error "Could not sign $artifact with key $signer_key"
 			result=1
+
+		elif ! signlog+=$(foundry_context_add_file "$context" \
+							   "signed"   \
+							   "$artifact" 2>&1); then
+			log_error "Could not add $artifact to context $context"
+			result=1
 		fi
-	done < <(foundry_context_get_files "$context" "build")
+	done < <(foundry_context_get_files "$build_context" "build")
 
 	if ! foundry_context_log "$context" "sign" <<< "$signlog"; then
 		log_error "Could not log to context $context"
+		result=1
 	fi
 
-	if ! publish_results "$endpoint" "$publish_to" \
-	                     "$signer_key" "$context"  \
-	                     "$repository" "$branch"   \
-	                     "$ref"; then
-		log_error "Could not publish results to $publish_to"
-		return 1
+	if (( result == 0 )); then
+		if ! publish_results "$endpoint" "$publish_to" \
+		                     "$signer_key" "$context"  \
+		                     "$repository" "$branch"   \
+	                             "$ref"; then
+			log_error "Could not publish results to $publish_to"
+			result=1
+		fi
+	else
+		if ! publish_results "$endpoint" "signbot_errors" \
+		                     "$signer_key" "$context"     \
+		                     "$repository" "$branch"      \
+		                     "$ref"; then
+			log_error "Could not send error to signbot_errors"
+		fi
 	fi
 
-	return 0
+	return "$result"
 }
 
 dispatch_tasks() {
