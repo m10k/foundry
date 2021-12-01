@@ -113,6 +113,8 @@ handle_commit_message() {
 	buildable_branches=(
 		"master"
 		"stable"
+		"testing"
+		"unstable"
 	)
 	result=0
 	err=0
