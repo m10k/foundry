@@ -16,11 +16,102 @@ store_packages() {
 	return 0
 }
 
+increase_version() {
+	local verrel="$1"
+
+	local version
+	local version_prefix
+	local version_suffix
+	local unixtime
+
+	version="${verrel%-*}"
+
+	version_prefix="${version%.*}"
+	version_suffix="${version##*.}"
+
+	if ! is_digits "$version_suffix"; then
+		return 1
+	fi
+
+	(( version_suffix++ ))
+
+	if ! unixtime=$(date +"%s"); then
+		return 1
+	fi
+
+	echo "$version_prefix.$version_suffix-$unixtime"
+	return 0
+}
+
+make_changelog_entry() {
+	local package="$1"
+	local version="$2"
+	local branch="$3"
+	local ref="$4"
+
+	local datetime
+
+	if ! datetime=$(date -R); then
+		return 1
+	fi
+
+	cat <<EOF
+$package ($version) unstable; urgency=medium
+
+  * Automatic build from $branch branch [$ref]
+
+ -- Build Bot <buildbot@m10k.eu>  $datetime
+EOF
+
+    return 0
+}
+
+prepend_changelog() {
+	local changelog="$1"
+	local branch="$2"
+	local ref="$3"
+
+	local package
+	local prev_version
+	local next_version
+	local prev_changelog
+	local updated_changelog
+
+	if ! prev_changelog=$(< "$changelog"); then
+		log_error "Could not read changelog"
+
+	elif ! package=$(grep -m 1 -oP '^\K[^ ]+' <<< "$prev_changelog"); then
+		log_error "Could not parse package name from changelog"
+
+	elif ! prev_version=$(grep -m 1 -oP '^[^ ]+ \(\K[^\)]+' <<< "$prev_changelog"); then
+		log_error "Could not parse previous version from changelog"
+
+	elif ! next_version=$(increase_version "$prev_version"); then
+		log_error "Could not increase version"
+
+	elif ! updated_changelog=$(make_changelog_entry "$package"      \
+	                                                "$next_version" \
+	                                                "$branch"       \
+	                                                "$ref"); then
+		log_error "Could not make changlog entry"
+
+	elif ! printf '%s\n\n\n%s\n' "$updated_changelog" \
+	                             "$prev_changelog" > "$changelog"; then
+		log_error "Could not write to changelog"
+
+	else
+		return 0
+	fi
+
+	return 1
+}
+
 build() {
 	local context="$1"
 	local repository="$2"
 	local branch="$3"
-	local builddir="$4"
+	local ref="$4"
+	local builddir="$5"
 
 	local output
 	local err
@@ -41,7 +132,16 @@ build() {
 		return 1
 	fi
 
-	if ! output=$(cd "$builddir/sources" && dpkg-buildpackage --no-sign 2>&1); then
+	if [[ "$branch" == "unstable" ]]; then
+		if ! prepend_changelog "$builddir/sources/debian/changelog" \
+		                       "$branch"                            \
+		                       "$ref"; then
+			log_error "Could not add entry to $builddir/sources/debian/changelog"
+			return 1
+		fi
+	fi
+
+	if ! output=$(cd "$builddir/sources" && dpkg-buildpackage -us -uc 2>&1); then
 		err=1
 	fi
 
@@ -154,7 +254,7 @@ handle_commit_message() {
 	fi
 
 	log_info "Building $context in $builddir"
-	if ! build "$context" "$repository" "$ref" "$builddir"; then
+	if ! build "$context" "$repository" "$branch" "$ref" "$builddir"; then
 		result=1
 	fi
 
