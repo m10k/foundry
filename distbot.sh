@@ -166,6 +166,10 @@ process_sign_message() {
 		return 1
 	fi
 
+	if [[ "$branch" == "unstable" ]]; then
+		codename="unstable"
+	fi
+
 	readarray -t artifacts < <(foundry_context_get_files "$context" "signed")
 
 	for artifact in "${artifacts[@]}"; do
