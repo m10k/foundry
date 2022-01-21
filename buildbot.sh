@@ -20,26 +20,15 @@ increase_version() {
 	local verrel="$1"
 
 	local version
-	local version_prefix
-	local version_suffix
 	local unixtime
 
 	version="${verrel%-*}"
-
-	version_prefix="${version%.*}"
-	version_suffix="${version##*.}"
-
-	if ! is_digits "$version_suffix"; then
-		return 1
-	fi
-
-	(( version_suffix++ ))
 
 	if ! unixtime=$(date +"%s"); then
 		return 1
 	fi
 
-	echo "$version_prefix.$version_suffix-$unixtime"
+	echo "$version-$unixtime"
 	return 0
 }
 
