@@ -37,7 +37,33 @@ watch_to_branch() {
 	return 0
 }
 
-fetch_head_remote() {
+fetch_head_smart_http() {
+	local watch="$1"
+
+	local repository
+	local branch
+	local url
+	local re
+	local data
+	local ref
+
+	repository=$(watch_to_repository "$watch")
+	branch=$(watch_to_branch "$watch")
+
+	re="00[0-9a-f]{2}\\K[0-9a-f]{40} refs/heads/$branch"
+	url="$repository/info/refs?service=git-upload-pack"
+
+	if ! data=$(curl --get --silent --location "$url" 2>/dev/null |
+			    grep -oP "$re" --binary-files=text); then
+		return 1
+	fi
+
+	ref="${data%% *}"
+	echo "$ref"
+	return 0
+}
+
+fetch_head_dumb_http() {
 	local watch="$1"
 
 	local repository
@@ -66,6 +92,21 @@ fetch_head_remote() {
 	fi
 
 	echo "${BASH_REMATCH[1]}"
+	return 0
+}
+
+fetch_head_remote() {
+	local watch="$1"
+
+	local head
+
+	if ! head=$(fetch_head_smart_http "$watch"); then
+		if ! head=$(fetch_head_dumb_http "$watch"); then
+			return 1
+		fi
+	fi
+
+	echo "$head"
 	return 0
 }
 
