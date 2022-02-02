@@ -4,21 +4,20 @@ __init() {
 	local submodules
 	local deps
 
-	submodules=("foundry/msg/artifact"
-		    "foundry/msg/buildrequest"
-		    "foundry/msg/build"
-		    "foundry/msg/commit"
-		    "foundry/msg/distrequest"
-		    "foundry/msg/dist"
-		    "foundry/msg/mergerequest"
-		    "foundry/msg/merge"
-		    "foundry/msg/signrequest"
-		    "foundry/msg/sign"
-		    "foundry/msg/testrequest"
-		    "foundry/msg/test")
+	submodules=(
+		"foundry/msg/artifact"
+		"foundry/msg/build"
+		"foundry/msg/commit"
+		"foundry/msg/dist"
+		"foundry/msg/merge"
+		"foundry/msg/sign"
+		"foundry/msg/test"
+	)
 
-	deps=("ipc"
-	      "json")
+	deps=(
+		"ipc"
+		"json"
+	)
 
 	if ! include "${submodules[@]}" "${deps[@]}"; then
 		return 1
@@ -27,30 +26,20 @@ __init() {
 	declare -gxir __foundry_msg_version=1
 
 	declare -gxir __foundry_msg_type_build=1
-	declare -gxir __foundry_msg_type_buildrequest=2
-	declare -gxir __foundry_msg_type_commit=3
-	declare -gxir __foundry_msg_type_dist=4
-	declare -gxir __foundry_msg_type_distrequest=5
-	declare -gxir __foundry_msg_type_merge=6
-	declare -gxir __foundry_msg_type_mergerequest=7
-	declare -gxir __foundry_msg_type_sign=8
-	declare -gxir __foundry_msg_type_signrequest=9
-	declare -gxir __foundry_msg_type_test=10
-	declare -gxir __foundry_msg_type_testrequest=11
+	declare -gxir __foundry_msg_type_commit=2
+	declare -gxir __foundry_msg_type_dist=3
+	declare -gxir __foundry_msg_type_merge=4
+	declare -gxir __foundry_msg_type_sign=5
+	declare -gxir __foundry_msg_type_test=6
 
 	declare -gxA __foundry_msg_typemap
 
 	__foundry_msg_typemap["build"]="$__foundry_msg_type_build"
-	__foundry_msg_typemap["buildrequest"]="$__foundry_msg_type_buildrequest"
 	__foundry_msg_typemap["commit"]="$__foundry_msg_type_commit"
 	__foundry_msg_typemap["dist"]="$__foundry_msg_type_dist"
-	__foundry_msg_typemap["distrequest"]="$__foundry_msg_type_distrequest"
 	__foundry_msg_typemap["merge"]="$__foundry_msg_type_merge"
-	__foundry_msg_typemap["mergerequest"]="$__foundry_msg_type_mergerequest"
 	__foundry_msg_typemap["sign"]="$__foundry_msg_type_sign"
-	__foundry_msg_typemap["signrequest"]="$__foundry_msg_type_signrequest"
 	__foundry_msg_typemap["test"]="$__foundry_msg_type_test"
-	__foundry_msg_typemap["testrequest"]="$__foundry_msg_type_testrequest"
 
 	return 0
 }
