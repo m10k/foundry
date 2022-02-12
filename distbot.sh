@@ -294,7 +294,7 @@ main() {
 		    "The codename of the distribution (default: stable)"
 	opt_add_arg "a" "arch"        "rv" ""            \
 		    "Comma separated list of supported architectures"
-	opt_add_arg "k" "gpgkey"      "rv" ""            \
+	opt_add_arg "k" "gpg-key"     "rv" ""            \
 		    "The GPG key used for signing"
 	opt_add_arg "d" "description" "rv" ""            \
 		    "Description of the repository"
@@ -310,7 +310,7 @@ main() {
 	publish_to=$(opt_get "publish-to")
 	name=$(opt_get "name")
 	arch=$(opt_get "arch")
-	gpgkey=$(opt_get "gpgkey")
+	gpgkey=$(opt_get "gpg-key")
 	desc=$(opt_get "description")
 
 	if ! looks_like_a_repository "$path"; then

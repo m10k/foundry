@@ -251,10 +251,10 @@ listening on *pub/buildbot_amd64* will see the message.
 
 Signbots are started as shown below.
 
-    $ ./signbot.sh --key <keyid>
+    $ ./signbot.sh --gpg-key <keyid>
 
 The purpose of signbot is to sign Debian packages, so you need to tell it which key to
-use using the `--key` option. The key must be a key-id from the default GPG key ring.
+use using the `--gpg-key` option. The key must be a key-id from the default GPG key ring.
 By default, signbots are load-balanced the same way as the buildbots. If you want to sign
 packages going to one repository with a different key than packages going to a different
 repository, you will have to start two signbots with differing `--endpoint` and
@@ -267,7 +267,7 @@ Distbot has a few more options, but most of them are fairly self-explanatory.
     $ ./distbot.sh --name deb.example.org        \
                    --output /srv/www/deb         \
                    --arch amd64,i386             \
-                   --gpgkey <keyid>              \
+                   --gpg-key <keyid>              \
                    --description "My repository"
 
 Like signbot, distbot needs a GPG key id. Unlike the signbot key, which is used to sign

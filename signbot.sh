@@ -171,7 +171,7 @@ main() {
 	opt_add_arg "e" "endpoint"   "v"  "pub/signbot" "The IPC endpoint to listen on"
 	opt_add_arg "w" "watch"      "v"  "builds"      "The topic to watch for build messages"
 	opt_add_arg "p" "publish-to" "v"  "signs"       "The topic to publish signs under"
-	opt_add_arg "k" "key"        "rv" ""            "Fingerprint of the key to sign with"
+	opt_add_arg "k" "gpg-key"    "rv" ""            "Fingerprint of the key to sign with"
 
 	if ! opt_parse "$@"; then
 		return 1
@@ -180,7 +180,7 @@ main() {
 	endpoint=$(opt_get "endpoint")
 	watch=$(opt_get "watch")
 	publish_to=$(opt_get "publish-to")
-	key=$(opt_get "key")
+	key=$(opt_get "gpg-key")
 
 	if ! inst_start dispatch_tasks "$endpoint" "$watch" "$publish_to" "$key"; then
 		return 1
