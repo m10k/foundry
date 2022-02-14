@@ -1,0 +1,14 @@
+Source: foundry
+Priority: optional
+Maintainer: Matthias Kruk <m@m10k.eu>
+Build-Depends: debhelper (>= 9), adduser (>= 3.11), make, coreutils, findutils, grep, sed
+Standards-Version: 3.9.8
+Section: shells
+Homepage: https://m10k.eu/foundry.html
+
+Package: foundry
+Section: shells
+Architecture: all
+Depends: bash (>= 4.0), toolbox (>= 0.3.3), curl, grep, coreutils, git, jq, dpkg-dev, dpkg-sig, reprepro
+Description: Distributed package build system
+ Foundry is a distributed build system for Debian packages

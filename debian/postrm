@@ -1,0 +1,34 @@
+#!/bin/sh
+
+remove_override() {
+	file="$1"
+
+	if dpkg-statoverride --list "$file" >/dev/null 2>&1; then
+		if ! dpkg-statoverride --remove "$file"; then
+			return 1
+		fi
+	fi
+
+	return 0
+}
+
+main() {
+	action="$1"
+
+	# don't remove stat overrides if not uninstalling
+	if [ "$action" != "remove" ]; then
+		return 0
+	fi
+
+	remove_override /var/lib/foundry/contexts
+	remove_override /var/lib/foundry
+
+	delgroup --system foundry
+
+	return 0
+}
+
+{
+	main "$@"
+	exit "$?"
+}

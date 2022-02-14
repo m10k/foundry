@@ -1,0 +1,41 @@
+#!/bin/sh
+
+stat_override() {
+	file="$1"
+	user="$2"
+	group="$3"
+	mode="$4"
+
+	if ! dpkg-statoverride --list "$file" >/dev/null 2>&1; then
+		if ! dpkg-statoverride --update --add "$user" "$group" "$mode" "$file"; then
+			return 1
+		fi
+	fi
+
+	return 0
+}
+
+main() {
+	action="$1"
+
+	# only add groups and stat overrides when installing
+	if [ "$action" != "configure" ]; then
+		return 0
+	fi
+
+	# If a group exists, there is a chance that the user
+	# has customized directory ownership and permissions,
+	# so we don't change it.
+
+	if addgroup --system foundry; then
+		stat_override /var/lib/foundry root foundry 0770
+		stat_override /var/lib/foundry/contexts root foundry 0770
+	fi
+
+	return 0
+}
+
+{
+	main "$@"
+	exit "$?"
+}
