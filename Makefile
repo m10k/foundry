@@ -19,11 +19,11 @@ install:
 	find $(DESTDIR)$(PREFIX)/share/foundry -type d -exec chmod 755 {} \;
 	find $(DESTDIR)$(PREFIX)/share/foundry -type f -exec chmod 644 {} \;
 	find $(DESTDIR)$(PREFIX)/share/foundry/bots -type f -exec chmod 755 {} \;
-	ln -s $(DESTDIR)$(PREFIX)/share/foundry/bots/buildbot.sh $(DESTDIR)$(PREFIX)/bin/buildbot
-	ln -s $(DESTDIR)$(PREFIX)/share/foundry/bots/distbot.sh  $(DESTDIR)$(PREFIX)/bin/distbot
-	ln -s $(DESTDIR)$(PREFIX)/share/foundry/bots/signbot.sh  $(DESTDIR)$(PREFIX)/bin/signbot
-	ln -s $(DESTDIR)$(PREFIX)/share/foundry/bots/watchbot.sh $(DESTDIR)$(PREFIX)/bin/watchbot
-	ln -s $(DESTDIR)$(PREFIX)/share/foundry/include/foundry  $(DESTDIR)$(PREFIX)/share/toolbox/include/foundry
+	ln -s $(PREFIX)/share/foundry/bots/buildbot.sh $(DESTDIR)$(PREFIX)/bin/buildbot
+	ln -s $(PREFIX)/share/foundry/bots/distbot.sh  $(DESTDIR)$(PREFIX)/bin/distbot
+	ln -s $(PREFIX)/share/foundry/bots/signbot.sh  $(DESTDIR)$(PREFIX)/bin/signbot
+	ln -s $(PREFIX)/share/foundry/bots/watchbot.sh $(DESTDIR)$(PREFIX)/bin/watchbot
+	ln -s $(PREFIX)/share/foundry/include/foundry  $(DESTDIR)$(PREFIX)/share/toolbox/include/foundry
 
 uninstall:
 	rm $(DESTDIR)$(PREFIX)/bin/buildbot
