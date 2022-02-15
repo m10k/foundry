@@ -164,43 +164,61 @@ components relate to each other.
 ( deb.m10k.eu stable )        ( deb.m10k.eu unstable )
 ```
 
-### Installation
+### Installation using apt
 
-There are no packages for foundry yet, so installation is still a manual (but
-straightforward) process. This section explains how to get started.
+If you are using a Debian-based distribution, you can install foundry through apt.
+First, import the GPG key used to sign packages in the repository and make sure you
+have `apt-transport-https` installed.
+
+    # wget -O - -- https://deb.m10k.eu/deb.m10k.eu.gpg.key | apt-key add -
+    # apt-get install apt-transport-https
+
+Then add the following line to your `/etc/apt/sources.lst`.
+
+    deb https://deb.m10k.eu stable main
+
+If you prefer to use a development build, use the `unstable` suite instead.
+
+    deb https://deb.m10k.eu unstable main
+
+Next, update your package index using the following command.
+
+    # apt-get update
+
+Now you can install and update foundry with apt.
+
+    # apt-get install foundry
 
 
-#### Dependencies
+### Installation from the sources
 
-First of all, make sure you have [toolbox](https://github.com/m10k/toolbox) installed
-and the user you're going to use for foundry is member of the *toolbox_ipc* group.
-Next, create `/var/lib/foundry/contexts` exists and make sure your user can write to it.
-
-    # mkdir -p /var/lib/foundry/contexts
-    # chown -R <user>.<group> /var/lib/foundry
-    # chmod -R 770 /var/lib/foundry
-
-
-#### Getting the sources
-
-Foundry needs to be installed from the sources, so first you have to clone the git
-repository.
+If you would prefer to install foundry from the sources, first install
+[toolbox](https://m10k.eu/toolbox.html), then run the following commands.
 
     $ git clone https://github.com/m10k/foundry
-
-Then, change into the foundry directory.
-
     $ cd foundry
+    $ sudo make install
 
-Foundry comes with a number of toolbox modules, so we need to make sure toolbox can load
-them.
+For the latest development version, switch to the *unstable* branch using
+`git checkout unstable` or specify the branch with `-b` when cloning the repository.
 
-    $ ln -s "$PWD/include" "$HOME/.toolbox/include/foundry"
+### Configuration
+
+The user that runs foundry has to be member of the *toolbox*, *toolbox_ipc*, and
+*foundry* groups. You can add a user to these groups using the following command.
+
+    # usermod -a -G toolbox,toolbox_ipc,foundry USER
+
+The user further needs to have GPG keys for IPC messaging, package signing, and repository
+metadata signing. Ideally you should create three keypairs, the default key being used for
+IPC messaging. Keys can be generated using the following command.
+
+    $ gpg --full-generate-key
 
 
 ### Starting foundry
 
-Now we can start the build system.
+The following example shows how to build toolbox with foundry.
 
 
 #### Starting watchbot
@@ -208,19 +226,13 @@ Now we can start the build system.
 First, we will start a watchbot to watch the toolbox repository's stable branch. This
 can be achieved with the following command.
 
-    $ ./watchbot.sh --repository https://github.com/m10k/toolbox#stable \
-                    --name "somename"
+    $ watchbot --repository https://github.com/m10k/toolbox#stable
 
 A single watchbot can watch an arbitrary number of repositories. If you want to watch more
 than one repository, pass `--repository` multiple times, as shown below.
 
-    $ ./watchbot.sh --repository https://github.com/m10k/toolbox#stable   \
-                    --repository https://github.com/m10k/toolbox#unstable \
-                    --name "somename"
-
-The purpose of the `--name` parameter was to make it easier to distinguish between running
-instances. It's not used at all, so you can pass anything you like. This parameter will be
-removed soon.
+    $ watchbot --repository https://github.com/m10k/toolbox#stable   \
+               --repository https://github.com/m10k/toolbox#unstable
 
 Watchbot supports watching of remote repositories (via git's dumb and smart HTTP transports)
 as well as local repositories.
@@ -229,7 +241,7 @@ as well as local repositories.
 
 This one is really simple.
 
-    $ ./buildbot.sh
+    $ buildbot
 
 By default, buildbot will use the IPC endpoint `pub/buildbot` to subscribe to *commits*.
 This means, by default build jobs will be balanced over all buildbots. If you would prefer
@@ -238,10 +250,10 @@ building for multiple architectures, you need to pass the `--endpoint` parameter
 think of the IPC endpoint as a load-balancing group. For example, consider you have started
 four buildbots as shown below.
 
-    $ ./buildbot.sh --endpoint pub/buildbot_i386
-    $ ./buildbot.sh --endpoint pub/buildbot_i386
-    $ ./buildbot.sh --endpoint pub/buildbot_amd64
-    $ ./buildbot.sh --endpoint pub/buildbot_amd64
+    $ buildbot --endpoint pub/buildbot_i386
+    $ buildbot --endpoint pub/buildbot_i386
+    $ buildbot --endpoint pub/buildbot_amd64
+    $ buildbot --endpoint pub/buildbot_amd64
 
 In this scenario, if a new commit is published, it is sent to either IPC endpoint. This
 means, one of the buildbots listening on *pub/buildbot_i386* and one of the buildbots
@@ -251,7 +263,7 @@ listening on *pub/buildbot_amd64* will see the message.
 
 Signbots are started as shown below.
 
-    $ ./signbot.sh --gpg-key <keyid>
+    $ signbot --gpg-key <keyid>
 
 The purpose of signbot is to sign Debian packages, so you need to tell it which key to
 use using the `--gpg-key` option. The key must be a key-id from the default GPG key ring.
@@ -264,11 +276,11 @@ repository, you will have to start two signbots with differing `--endpoint` and
 
 Distbot has a few more options, but most of them are fairly self-explanatory.
 
-    $ ./distbot.sh --name deb.example.org        \
-                   --output /srv/www/deb         \
-                   --arch amd64,i386             \
-                   --gpg-key <keyid>              \
-                   --description "My repository"
+    $ distbot --name deb.example.org        \
+              --output /srv/www/deb         \
+              --arch amd64,i386             \
+              --gpg-key <keyid>             \
+              --description "My repository"
 
 Like signbot, distbot needs a GPG key id. Unlike the signbot key, which is used to sign
 packages, this key is used to sign the metadata in the repository. You are strongly
@@ -286,11 +298,11 @@ topic that your signbot is publishing messages on.
 If you want to see a list of the running bots, pass `--list` to the bot you're interested
 in. For example, the following command will list all running watchbots.
 
-    $ ./watchbot.sh --list
+    $ watchbot --list
 
 If you want to stop a particular bot, use `--stop`.
 
-    $ ./watchbot.sh --stop 12345
+    $ watchbot --stop 12345
 
 That's all you need to know to get started. If everything went well, you should be seeing
 built packages in your Debian repository. If not, the logs within `$HOME/.toolbox/log`
