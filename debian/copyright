@@ -1,6 +1,6 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: toolbox
-Source: https://m10k.eu/toolbox
+Upstream-Name: foundry
+Source: https://m10k.eu/foundry.html
 
 Files: *
 Copyright: 2021 Matthias Kruk <m@m10k.eu>
