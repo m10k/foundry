@@ -37,24 +37,28 @@ make_repo_config() {
 repo_init() {
 	local repo="$1"
 	local domain="$2"
-	local codename="$3"
-	local arch="$4"
-	local gpgkeyid="$5"
-	local description="$6"
+	local arch="$3"
+	local gpgkeyid="$4"
+	local description="$5"
+	local codenames=("${@:6}")
 
-	local config
+	local codename
 
 	if ! mkdir -p "$repo/conf" "$repo/incoming" "$repo/failed" &>/dev/null; then
 		log_error "Could not create directory structure in $repo"
 		return 1
 	fi
 
-	config=$(make_repo_config "$domain" "$codename" "$arch" \
-				  "$gpgkeyid" "$description")
+	for codename in "${codenames[@]}"; do
+		local config
 
-	if ! echo "$config" > "$repo/conf/distributions"; then
-		return 1
-	fi
+		config=$(make_repo_config "$domain" "$codename" "$arch" \
+	                                  "$gpgkeyid" "$description")
+
+		if ! printf "%s\n\n" "$config" >> "$repo/conf/distributions"; then
+			return 1
+		fi
+	done
 
 	return 0
 }
@@ -297,9 +301,19 @@ _add_arch() {
 	return 0
 }
 
+_add_codename() {
+	# local name="$1" # unused
+	local value="$2"
+
+	# `codenames' is inherited from main()
+	codenames+=("$value")
+
+	return 0
+}
+
 main() {
 	local path
-	local codename
+	local codenames
 	local endpoint
 	local watch
 	local publish_to
@@ -309,6 +323,7 @@ main() {
 	local desc
 
 	architectures=()
+	codenames=()
 
 	opt_add_arg "e" "endpoint"    "v"  "pub/distbot" "The IPC endpoint to listen on"
 	opt_add_arg "w" "watch"       "v"  "signs"       \
@@ -318,8 +333,8 @@ main() {
 
 	opt_add_arg "n" "name"        "rv" ""            "The name of the repository"
 	opt_add_arg "o" "output"      "rv" ""            "The path to the repository"
-	opt_add_arg "c" "codename"    "v"  "stable"      \
-		    "The codename of the distribution (default: stable)"
+	opt_add_arg "c" "codename"    "v"  ""            \
+		    "Distribution codename (may be used more than once)"   "" _add_codename
 	opt_add_arg "a" "arch"        "rv" ""            \
 		    "Repository architecture (may be used more than once)" "" _add_arch
 	opt_add_arg "k" "gpg-key"     "rv" ""            \
@@ -331,8 +346,11 @@ main() {
 		return 1
 	fi
 
+	if (( ${#codenames[@]} == 0 )); then
+		codenames+=("stable")
+	fi
+
 	path=$(opt_get "output")
-	codename=$(opt_get "codename")
 	endpoint=$(opt_get "endpoint")
 	watch=$(opt_get "watch")
 	publish_to=$(opt_get "publish-to")
@@ -344,8 +362,8 @@ main() {
 		# Create new repository
 		log_info "Initializing repository $name:$codename in $path"
 
-		if ! repo_init "$path" "$name" "$codename" "${architectures[*]}" \
-		               "$gpgkey" "$desc"; then
+		if ! repo_init "$path" "$name" "${architectures[*]}" \
+		               "$gpgkey" "$desc" "${codenames[@]}"; then
 			log_error "Could not initialize repository"
 			return 1
 		fi
