@@ -278,7 +278,8 @@ Distbot has a few more options, but most of them are fairly self-explanatory.
 
     $ distbot --name deb.example.org        \
               --output /srv/www/deb         \
-              --arch amd64,i386             \
+              --arch amd64                  \
+              --arch i386                   \
               --gpg-key <keyid>             \
               --description "My repository"
 

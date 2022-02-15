@@ -287,6 +287,16 @@ looks_like_a_repository() {
 	return 0
 }
 
+_add_arch() {
+	# local name="$1" # unused
+	local value="$2"
+
+	# `architectures' is inherited from main()
+	architectures+=("$value")
+
+	return 0
+}
+
 main() {
 	local path
 	local codename
@@ -294,9 +304,11 @@ main() {
 	local watch
 	local publish_to
 	local name
-	local arch
+	local architectures
 	local gpgkey
 	local desc
+
+	architectures=()
 
 	opt_add_arg "e" "endpoint"    "v"  "pub/distbot" "The IPC endpoint to listen on"
 	opt_add_arg "w" "watch"       "v"  "signs"       \
@@ -309,7 +321,7 @@ main() {
 	opt_add_arg "c" "codename"    "v"  "stable"      \
 		    "The codename of the distribution (default: stable)"
 	opt_add_arg "a" "arch"        "rv" ""            \
-		    "Comma separated list of supported architectures"
+		    "Repository architecture (may be used more than once)" "" _add_arch
 	opt_add_arg "k" "gpg-key"     "rv" ""            \
 		    "The GPG key used for signing"
 	opt_add_arg "d" "description" "rv" ""            \
@@ -325,7 +337,6 @@ main() {
 	watch=$(opt_get "watch")
 	publish_to=$(opt_get "publish-to")
 	name=$(opt_get "name")
-	arch=$(opt_get "arch")
 	gpgkey=$(opt_get "gpg-key")
 	desc=$(opt_get "description")
 
@@ -333,7 +344,8 @@ main() {
 		# Create new repository
 		log_info "Initializing repository $name:$codename in $path"
 
-		if ! repo_init "$path" "$name" "$codename" "$arch" "$gpgkey" "$desc"; then
+		if ! repo_init "$path" "$name" "$codename" "${architectures[*]}" \
+		               "$gpgkey" "$desc"; then
 			log_error "Could not initialize repository"
 			return 1
 		fi
