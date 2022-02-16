@@ -292,7 +292,7 @@ main() {
 		exit 1
 	fi
 
-	if ! include "log" "opt" "conf" "inst" "ipc" "foundry/msg" "foundry/context"; then
+	if ! include "log" "opt" "conf" "inst" "ipc" "foundry/msg" "foundry/context" "slack"; then
 		exit 1
 	fi
 
