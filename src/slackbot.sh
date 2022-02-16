@@ -144,7 +144,6 @@ relay_message_to_slack() {
 
 	declare -A message_handlers
 	local type
-	local data
 
 	message_handlers["commit"]=handle_commit_message
 	message_handlers["build"]=handle_build_message
@@ -159,12 +158,7 @@ relay_message_to_slack() {
 		return 1
 	fi
 
-	if ! data=$(foundry_msg_get_data "$message"); then
-		log_warn "Dropping message without data"
-		return 1
-	fi
-
-	if ! "${message_handlers[$type]}" "$data" "$channel" "$token"; then
+	if ! "${message_handlers[$type]}" "$message" "$channel" "$token"; then
 		return 1
 	fi
 
