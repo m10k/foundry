@@ -52,7 +52,6 @@ make_build_announcement() {
 	echo "Branch:     $branch"
 	echo "Ref:        $ref"
 	echo '```'
-	echo ""
 	echo "Artifacts:"
 	echo '```'
 	echo "$artifacts"
