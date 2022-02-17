@@ -60,6 +60,37 @@ make_build_announcement() {
 	return 0
 }
 
+make_sign_announcement() {
+	local context="$1"
+	local repository="$2"
+	local branch="$3"
+	local ref="$4"
+	local key="$5"
+
+	local artifacts
+
+	if ! artifacts=$(foundry_context_get_files "$context" "signed"); then
+		artifacts="(could not get artifacts)"
+	elif [[ -z "$artifacts" ]]; then
+		artifacts="(no artifacts)"
+	fi
+
+	echo "*Sign* detected"
+	echo '```'
+	echo "Context:    $context"
+	echo "Repository: $repository"
+	echo "Branch:     $branch"
+	echo "Ref:        $ref"
+	echo "GPG key:    $key"
+	echo '```'
+	echo "Artifacts:"
+	echo '```'
+	echo "$artifacts"
+	echo '```'
+
+	return 0
+}
+
 handle_commit_message() {
 	local commit_msg="$1"
 	local channel="$2"
@@ -136,6 +167,53 @@ handle_build_message() {
 	return 0
 }
 
+handle_sign_message() {
+	local sign_msg="$1"
+	local channel="$2"
+	local token="$3"
+
+	local context
+	local repository
+	local branch
+	local ref
+	local key
+	local msg
+
+	if ! context=$(foundry_msg_sign_get_context "$sign_msg"); then
+		log_warn "Dropping sign message without context"
+		return 1
+	fi
+
+	if ! repository=$(foundry_msg_sign_get_repository "$sign_msg"); then
+		log_warn "Dropping sign message without repository"
+		return 1
+	fi
+
+	if ! branch=$(foundry_msg_sign_get_branch "$sign_msg"); then
+		log_warn "Dropping sign message without branch"
+		return 1
+	fi
+
+	if ! ref=$(foundry_msg_sign_get_ref "$sign_msg"); then
+		log_warn "Dropping sign message without ref"
+		return 1
+	fi
+
+	if ! key=$(foundry_msg_sign_get_key "$sign_msg"); then
+		log_warn "Dropping sign message without key"
+		return 1
+	fi
+
+	msg=$(make_sign_announcement "$context" "$repository" "$branch" "$ref" "$key")
+
+	if ! slack_chat_post_message "$token" "$channel" "$msg"; then
+		log_error "Could not send message to slack"
+		return 1
+	fi
+
+	return 0
+}
+
 relay_message_to_slack() {
 	local message="$1"
 	local channel="$2"
@@ -146,6 +224,7 @@ relay_message_to_slack() {
 
 	message_handlers["commit"]=handle_commit_message
 	message_handlers["build"]=handle_build_message
+	message_handlers["sign"]=handle_sign_message
 
 	if ! type=$(foundry_msg_get_type "$message"); then
 		log_warn "Dropping invalid message"
