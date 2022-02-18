@@ -17,7 +17,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 _add_to_watchlist() {
-	local name="$1"
+	# local name="$1" # unused
 	local value="$2"
 
 	# assume master if user didn't specify a branch
@@ -25,6 +25,7 @@ _add_to_watchlist() {
 		value+="#master"
 	fi
 
+	# this is the `watchlist' array from main()
 	watchlist+=("$value")
 	return 0
 }
