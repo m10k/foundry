@@ -184,12 +184,18 @@ fetch_heads() {
 	local watchlist=("${@:2}")
 
 	local watch
+	local -i err
+
+	err=0
 
 	for watch in "${watchlist[@]}"; do
-		dst["$watch"]=$(fetch_head "$watch")
+		if ! dst["$watch"]=$(fetch_head "$watch"); then
+			log_debug "Could not fetch HEAD of $watch"
+			err=1
+		fi
 	done
 
-	return 0
+	return "$err"
 }
 
 send_notification() {
@@ -240,6 +246,11 @@ _watch() {
 
 			old_head="${old_heads[$watch]}"
 			new_head="${new_heads[$watch]}"
+
+			if [[ -z "$new_head" ]]; then
+				# Failed to fetch head for this watch
+				continue
+			fi
 
 			if [[ "$old_head" != "$new_head" ]]; then
 			        log_info "HEAD has changed on $watch"
