@@ -269,6 +269,8 @@ _watch() {
 		sleep "$interval"
 	done
 
+	ipc_endpoint_close "$endpoint"
+
 	return 0
 }
 
