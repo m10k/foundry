@@ -203,3 +203,7 @@ foundry_context_log() {
 
 	return 0
 }
+
+foundry_context_get_root() {
+	echo "$__foundry_context_root"
+}
