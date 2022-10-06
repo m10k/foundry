@@ -1,14 +1,15 @@
-PHONY = install uninstall test
+DEPS = utils
+PHONY = $(DEPS) install uninstall test
 
 ifeq ($(PREFIX), )
 	PREFIX = /usr
 endif
 
-all:
+all: $(DEPS)
 
-clean:
+clean: $(DEPS)
 
-install:
+install: $(DEPS)
 	mkdir -p $(DESTDIR)$(PREFIX)/bin
 	mkdir -p $(DESTDIR)$(PREFIX)/share/toolbox/include
 	mkdir -p $(DESTDIR)$(PREFIX)/share/foundry
@@ -26,7 +27,7 @@ install:
 	ln -s $(PREFIX)/share/foundry/bots/watchbot.sh $(DESTDIR)$(PREFIX)/bin/watchbot
 	ln -s $(PREFIX)/share/foundry/include/foundry  $(DESTDIR)$(PREFIX)/share/toolbox/include/foundry
 
-uninstall:
+uninstall: $(DEPS)
 	rm $(DESTDIR)$(PREFIX)/bin/buildbot
 	rm $(DESTDIR)$(PREFIX)/bin/distbot
 	rm $(DESTDIR)$(PREFIX)/bin/signbot
@@ -34,5 +35,8 @@ uninstall:
 	rm $(DESTDIR)$(PREFIX)/bin/watchbot
 	rm $(DESTDIR)$(PREFIX)/share/toolbox/include/foundry
 	rm -rf $(DESTDIR)$(PREFIX)/share/foundry
+
+$(DEPS):
+	$(MAKE) -C $@ $(MAKECMDGOALS)
 
 .PHONY: $(PHONY)
