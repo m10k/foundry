@@ -111,6 +111,57 @@ prepend_changelog() {
 	return 1
 }
 
+prepare_buildroot() {
+	local args
+
+	if [ -f /var/cache/pbuilder/base.tgz ]; then
+		return 0
+	fi
+
+	args=(
+		--distribution    "stable"
+		--mirror          "http://ftp.debian.org/debian"
+		--debootstrapopts "--keyring=/usr/share/keyrings/debian-archive-keyring.gpg"
+	)
+
+	if ! sudo pbuilder create "${args[@]}"; then
+		return 1
+	fi
+
+	return 0
+}
+
+build_deb_in_builddir() {
+	local builddir="$1"
+
+	local -i no_packages
+	local dsc
+
+	if ! prepare_buildroot; then
+		return 1
+	fi
+
+	no_packages=1
+
+	if ! ( cd "$builddir" && dpkg-source --build "sources"); then
+		log_error "Could not build source package"
+		return 1
+	fi
+
+	while read -r dsc; do
+		log_info "Building $dsc"
+
+		if ! sudo pbuilder build --buildresult "$builddir" "$dsc"; then
+			log_error "Build of $dsc failed"
+			return 1
+		fi
+
+		no_packages=0
+	done < <(find "$builddir" -type f -name "*.dsc")
+
+	return "$no_packages"
+}
+
 build() {
 	local context="$1"
 	local repository="$2"
@@ -146,7 +197,7 @@ build() {
 		fi
 	fi
 
-	if ! output=$(cd "$builddir/sources" && dpkg-buildpackage -us -uc 2>&1); then
+	if ! output=$(build_deb_in_builddir "$builddir"); then
 		err=1
 	fi
 
