@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # buildbot.sh - Foundry Debian package build bot
-# Copyright (C) 2021-2022 Matthias Kruk
+# Copyright (C) 2021-2023 Matthias Kruk
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -122,6 +122,8 @@ prepare_buildroot() {
 		--distribution    "stable"
 		--mirror          "http://ftp.debian.org/debian"
 		--debootstrapopts "--keyring=/usr/share/keyrings/debian-archive-keyring.gpg"
+		# Necessary when building debian buildroots on devuan
+		--debootstrapopts "--exclude=devuan-keyring,devuan-baseconf"
 	)
 
 	if ! sudo pbuilder create "${args[@]}"; then
