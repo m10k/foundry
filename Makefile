@@ -13,6 +13,10 @@ install: $(DEPS)
 	mkdir -p $(DESTDIR)$(PREFIX)/share/toolbox/include
 	mkdir -p $(DESTDIR)$(PREFIX)/share/foundry
 	mkdir -p $(DESTDIR)/var/lib/foundry/contexts
+	install --owner root --group root --mode 755 foundry.sh $(DESTDIR)$(PREFIX)/share/foundry/.
+	ln -s $(PREFIX)/share/foundry/foundry.sh $(DESTDIR)$(PREFIX)/bin/foundry
+	mkdir -p $(DESTDIR)/etc
+	install --owner root --group root --mode 644 foundry.conf $(DESTDIR)/etc/.
 	cp -r include $(DESTDIR)$(PREFIX)/share/foundry/.
 	chown root.root $(DESTDIR)$(PREFIX)/share/foundry
 	chown -R root.root $(DESTDIR)$(PREFIX)/share/foundry/include
