@@ -1,3 +1,17 @@
+foundry (0.1.1-1) stable; urgency=medium
+
+  * New features
+    - Support for builds in buildroots
+    - Scripts for connecting bots over SSH
+    - Configuration file and script for starting and stoping
+    - Bot for sending notifications to Slack
+  * Bugfixes
+    - Don't send notifications when a HEAD could not be fetched
+    - Make watchbot clean up IPC endpoints upon exit
+
+ -- Matthias Kruk <m@m10k.eu>  Wed, 25 Jan 2023 17:04:37 +0900
+
+
 foundry (0.1-1) stable; urgency=medium
 
   * Initial release
