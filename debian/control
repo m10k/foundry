@@ -9,6 +9,6 @@ Homepage: https://m10k.eu/foundry.html
 Package: foundry
 Section: shells
 Architecture: all
-Depends: bash (>= 4.0), toolbox (>= 0.3.3), toolbox-restapis, curl, grep, coreutils, git, jq, dpkg-dev, dpkg-sig, reprepro
+Depends: bash (>= 4.0), toolbox (>= 0.3.3), toolbox-restapis, curl, grep, coreutils, git, jq, dpkg-dev, dpkg-sig, reprepro, pbuilder, debian-archive-keyring, sudo
 Description: Distributed package build system
  Foundry is a distributed build system for Debian packages
