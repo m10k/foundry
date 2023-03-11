@@ -31,7 +31,6 @@ __init() {
 	)
 
 	deps=(
-		"ipc"
 		"json"
 	)
 
@@ -127,37 +126,6 @@ _foundry_msg_version_supported() {
 	fi
 
 	return 0
-}
-
-foundry_msg_from_ipc_msg() {
-	local ipc_msg="$1"
-
-	local basemsg
-	local type
-	local typeno
-	local data
-
-	if ! basemsg=$(ipc_msg_get_data "$ipc_msg"); then
-		return 255
-	fi
-
-	if ! _foundry_msg_version_supported "$basemsg"; then
-		return 255
-	fi
-
-	if ! type=$(foundry_msg_get_type "$basemsg") ||
-	   ! data=$(foundry_msg_get_data "$basemsg"); then
-		return 255
-	fi
-
-	if ! array_contains "$type" "${!__foundry_msg_typemap[@]}"; then
-		return 255
-	fi
-
-	typeno="${__foundry_msg_typemap[$type]}"
-
-	echo "$data"
-	return "$typeno"
 }
 
 foundry_msg_new() {

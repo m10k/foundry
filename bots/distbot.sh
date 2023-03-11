@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # distbot.sh - Foundry Debian repository management bot
-# Copyright (C) 2021-2022 Matthias Kruk
+# Copyright (C) 2021-2023 Matthias Kruk
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -321,6 +321,7 @@ main() {
 	local architectures
 	local gpgkey
 	local desc
+	local proto
 
 	architectures=()
 	codenames=()
@@ -341,6 +342,8 @@ main() {
 		    "The GPG key used for signing"
 	opt_add_arg "d" "description" "rv" ""            \
 		    "Description of the repository"
+	opt_add_arg "P" "proto"       "v"  "uipc"        \
+	            "The IPC flavor to use" '^u?ipc$'
 
 	if ! opt_parse "$@"; then
 		return 1
@@ -357,6 +360,11 @@ main() {
 	name=$(opt_get "name")
 	gpgkey=$(opt_get "gpg-key")
 	desc=$(opt_get "description")
+	proto=$(opt_get "proto")
+
+	if ! include "$proto"; then
+		return 1
+	fi
 
 	if ! looks_like_a_repository "$path"; then
 		# Create new repository
@@ -379,7 +387,7 @@ main() {
 		exit 1
 	fi
 
-	if ! include "log" "opt" "queue" "inst" "ipc" "foundry/msg" "foundry/context"; then
+	if ! include "log" "opt" "queue" "inst" "foundry/msg" "foundry/context"; then
 		exit 1
 	fi
 

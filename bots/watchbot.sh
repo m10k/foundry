@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # watchbot.sh - Foundry git repository monitor bot
-# Copyright (C) 2021-2022 Matthias Kruk
+# Copyright (C) 2021-2023 Matthias Kruk
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -278,6 +278,7 @@ main() {
 	local watchlist
 	local interval
 	local publish_to
+	local proto
 
 	opt_add_arg "r" "repository" "rv" ""          \
 		    "Repository to watch for updates" \
@@ -286,6 +287,9 @@ main() {
 		    "Topic to publish notifications"
 	opt_add_arg "i" "interval"   "v"  30          \
 		    "Update check interval" "^[0-9]+$"
+	opt_add_arg "P" "proto"      "v"  "uipc"      \
+	            "The IPC flavor to use"           \
+	            '^u?ipc$'
 
 	if ! opt_parse "$@"; then
 		return 1
@@ -293,6 +297,11 @@ main() {
 
 	publish_to=$(opt_get "publish-to")
 	interval=$(opt_get "interval")
+	proto=$(opt_get "proto")
+
+	if ! include "$proto"; then
+		return 1
+	fi
 
 	inst_start _watch "$publish_to" "$interval" "${watchlist[@]}"
 
@@ -304,7 +313,7 @@ main() {
 		exit 1
 	fi
 
-	if ! include "log" "opt" "inst" "ipc" "foundry/msg"; then
+	if ! include "log" "opt" "inst" "foundry/msg"; then
 		exit 1
 	fi
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # foundry-ctxtap.sh - Context sender hook for ipc-tap
-# Copyright (C) 2022 Matthias Kruk
+# Copyright (C) 2022-2023 Matthias Kruk
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -27,10 +27,9 @@ create_context_archive() (
 )
 
 pack_context() {
-	local message="$1"
+	local fmsg="$1"
 
 	local accepted_types
-	local fmsg
 	local fmsgtype
 	local context
 	local data
@@ -39,11 +38,6 @@ pack_context() {
 		"build"
 		"sign"
 	)
-
-	if ! fmsg=$(ipc_msg_get_data "$message"); then
-		log_warn "Dropping message without data"
-		return 1
-	fi
 
 	if ! fmsgtype=$(foundry_msg_get_type "$fmsg"); then
 		log_warn "Dropping malformed foundry message"
@@ -103,7 +97,7 @@ main() {
 
 {
 	if ! . toolbox.sh ||
-	   ! include "log" "opt" "ipc" "json" "foundry/msg" "foundry/context"; then
+	   ! include "log" "opt" "json" "foundry/msg" "foundry/context"; then
 		exit 1
 	fi
 

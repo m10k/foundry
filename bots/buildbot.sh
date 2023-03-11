@@ -381,10 +381,12 @@ main() {
 	local endpoint
 	local watch
 	local publish_to
+	local proto
 
 	opt_add_arg "e" "endpoint"   "v" "pub/buildbot" "The IPC endpoint to listen on"
 	opt_add_arg "w" "watch"      "v" "commits"      "The topic to watch for commit messages"
 	opt_add_arg "p" "publish-to" "v" "builds"       "The topic to publish builds under"
+	opt_add_arg "P" "proto"      "v" "uipc"         "The IPC flavor to use"                  '^u?ipc$'
 
 	if ! opt_parse "$@"; then
 		return 1
@@ -393,6 +395,11 @@ main() {
 	endpoint=$(opt_get "endpoint")
 	watch=$(opt_get "watch")
 	publish_to=$(opt_get "publish-to")
+	proto=$(opt_get "proto")
+
+	if ! include "$proto"; then
+		return 1
+	fi
 
 	if ! inst_start dispatch_tasks "$endpoint" "$watch" "$publish_to"; then
 		return 1
@@ -406,7 +413,7 @@ main() {
 		exit 1
 	fi
 
-	if ! include "log" "opt" "inst" "ipc" "foundry/msg" "foundry/context"; then
+	if ! include "log" "opt" "inst" "foundry/msg" "foundry/context"; then
 		exit 1
 	fi
 

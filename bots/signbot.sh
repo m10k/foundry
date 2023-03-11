@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # signbot.sh - Foundry Debian package sign bot
-# Copyright (C) 2021-2022 Matthias Kruk
+# Copyright (C) 2021-2023 Matthias Kruk
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -183,11 +183,13 @@ main() {
 	local watch
 	local publish_to
 	local key
+	local proto
 
 	opt_add_arg "e" "endpoint"   "v"  "pub/signbot" "The IPC endpoint to listen on"
 	opt_add_arg "w" "watch"      "v"  "builds"      "The topic to watch for build messages"
 	opt_add_arg "p" "publish-to" "v"  "signs"       "The topic to publish signs under"
 	opt_add_arg "k" "gpg-key"    "rv" ""            "Fingerprint of the key to sign with"
+	opt_add_arg "P" "proto"      "v"  "uipc"        "The IPC flavor to use"                 '^u?ipc$'
 
 	if ! opt_parse "$@"; then
 		return 1
@@ -197,6 +199,11 @@ main() {
 	watch=$(opt_get "watch")
 	publish_to=$(opt_get "publish-to")
 	key=$(opt_get "gpg-key")
+	proto=$(opt_get "proto")
+
+	if ! include "$proto"; then
+		return 1
+	fi
 
 	if ! inst_start dispatch_tasks "$endpoint" "$watch" "$publish_to" "$key"; then
 		return 1
@@ -210,7 +217,7 @@ main() {
 		exit 1
 	fi
 
-	if ! include "is" "log" "opt" "inst" "ipc" "foundry/context" "foundry/msg"; then
+	if ! include "is" "log" "opt" "inst" "foundry/context" "foundry/msg"; then
 		exit 1
 	fi
 

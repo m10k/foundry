@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # slackbot.sh - Slack notification bot for foundry
-# Copyright (C) 2022 Matthias Kruk
+# Copyright (C) 2022-2023 Matthias Kruk
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -389,15 +389,23 @@ main() {
 	local topics
 	local token
 	local channel
+	local proto
 
 	topics=()
 
-	opt_add_arg "c" "channel" "v" "" "Slack channel to send messages to"
-	opt_add_arg "t" "token"   "v" "" "Token for authentication with Slack"
-	opt_add_arg "w" "watch"   "v" "" "Topic to watch for messages (may be used more than once)" \
+	opt_add_arg "c" "channel" "v" ""     "Slack channel to send messages to"
+	opt_add_arg "t" "token"   "v" ""     "Token for authentication with Slack"
+	opt_add_arg "w" "watch"   "v" ""     "Topic to watch for messages (may be used more than once)" \
 	            '' _add_topic
+	opt_add_arg "P" "proto"   "v" "uipc" "The IPC flavor to use"                                    \
+	            '^u?ipc$'
 
 	if ! opt_parse "$@"; then
+		return 1
+	fi
+
+	proto=$(opt_get "proto")
+	if ! include "$proto"; then
 		return 1
 	fi
 
@@ -440,7 +448,7 @@ main() {
 		exit 1
 	fi
 
-	if ! include "log" "opt" "conf" "inst" "ipc" "foundry/msg" "foundry/context" "slack"; then
+	if ! include "log" "opt" "conf" "inst" "foundry/msg" "foundry/context" "slack"; then
 		exit 1
 	fi
 
