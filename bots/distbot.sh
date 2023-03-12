@@ -81,16 +81,22 @@ repo_add_package() {
 verify_package() {
 	local package="$1"
 
+	local output
+	local -i retval
+	local -a result
+
 	log_info "Verifying signature on $package"
-	if ! dpkg-sig --verify "$package" | log_info "dpkg-sig --verify \"$package\""; then
-		log_error "Could not verify signature on $package"
 
-		return 1
-	fi
+	output=$(dpkg-sig --verify "$package" 2>&1)
+	retval="$?"
 
-	log_info "Good signature on $package"
+	result["$retval"]="Invalid"
+	result[0]="Valid"
 
-	return 0
+	log_info "${result[$retval]} signature on $package"
+	log_highlight "dpkg-sig --verify \"$package\" = $retval" <<< "$output" | log_info
+
+	return "$retval"
 }
 
 process_new_package() {
