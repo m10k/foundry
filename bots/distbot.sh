@@ -169,10 +169,9 @@ publish_result() {
 
 process_sign_message() {
 	local repo="$1"
-	local codename="$2"
-	local signmsg="$3"
-	local endpoint="$4"
-	local publish_to="$5"
+	local signmsg="$2"
+	local endpoint="$3"
+	local publish_to="$4"
 
 	local artifacts
 	local artifact
@@ -181,6 +180,7 @@ process_sign_message() {
 	local branch
 	local ref
 	local distributed
+	local codename
 
 	distributed=()
 
@@ -192,9 +192,7 @@ process_sign_message() {
 		return 1
 	fi
 
-	if [[ "$branch" == "unstable" ]]; then
-		codename="unstable"
-	fi
+	codename="${codename_map[$branch]-${codename_map["*"]}}"
 
 	readarray -t artifacts < <(foundry_context_get_files "$context" "signed")
 
@@ -236,7 +234,6 @@ watch_new_packages() {
 	local watch="$2"
 	local publish_to="$3"
 	local repo="$4"
-	local codename="$5"
 
 	local endpoint
 
@@ -276,8 +273,7 @@ watch_new_packages() {
 			continue
 		fi
 
-		process_sign_message "$repo" "$codename" "$signmsg" \
-		                     "$endpoint" "$publish_to"
+		process_sign_message "$repo" "$signmsg" "$endpoint" "$publish_to"
 	done
 
 	return 0
@@ -311,15 +307,30 @@ _add_codename() {
 	# local name="$1" # unused
 	local value="$2"
 
-	# `codenames' is inherited from main()
-	codenames+=("$value")
+	local branch
+	local codename
 
+	if [[ "$value" == *":"* ]]; then
+		branch="${value%%:*}"
+		codename="${value##*:}"
+	else
+		branch="*"
+		codename="$value"
+	fi
+
+	# `codename_map' is inherited from main()
+	if [[ -n "${codename_map[$branch]}" ]]; then
+		log_error "Mapping from $branch to ${codename_map[$branch]} exists"
+		return 1
+	fi
+
+	codename_map["$branch"]="$codename"
 	return 0
 }
 
 main() {
 	local path
-	local codenames
+	local -A codename_map
 	local endpoint
 	local watch
 	local publish_to
@@ -330,7 +341,6 @@ main() {
 	local proto
 
 	architectures=()
-	codenames=()
 
 	opt_add_arg "e" "endpoint"    "v"  "pub/distbot" "The IPC endpoint to listen on"
 	opt_add_arg "w" "watch"       "v"  "signs"       \
@@ -340,7 +350,7 @@ main() {
 
 	opt_add_arg "n" "name"        "rv" ""            "The name of the repository"
 	opt_add_arg "o" "output"      "rv" ""            "The path to the repository"
-	opt_add_arg "c" "codename"    "v"  ""            \
+	opt_add_arg "c" "codename"    "rv" ""            \
 		    "Distribution codename (may be used more than once)"   "" _add_codename
 	opt_add_arg "a" "arch"        "rv" ""            \
 		    "Repository architecture (may be used more than once)" "" _add_arch
@@ -353,10 +363,6 @@ main() {
 
 	if ! opt_parse "$@"; then
 		return 1
-	fi
-
-	if (( ${#codenames[@]} == 0 )); then
-		codenames+=("stable")
 	fi
 
 	path=$(opt_get "output")
@@ -374,16 +380,16 @@ main() {
 
 	if ! looks_like_a_repository "$path"; then
 		# Create new repository
-		log_info "Initializing repository $name:$codename in $path"
+		log_info "Initializing repository $name in $path"
 
 		if ! repo_init "$path" "$name" "${architectures[*]}" \
-		               "$gpgkey" "$desc" "${codenames[@]}"; then
+		               "$gpgkey" "$desc" "${codename_map[@]}"; then
 			log_error "Could not initialize repository"
 			return 1
 		fi
 	fi
 
-	inst_start watch_new_packages "$endpoint" "$watch" "$publish_to" "$path" "$codename"
+	inst_start watch_new_packages "$endpoint" "$watch" "$publish_to" "$path"
 
 	return 0
 }
