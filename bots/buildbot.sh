@@ -170,15 +170,22 @@ build() {
 	local branch="$3"
 	local ref="$4"
 	local builddir="$5"
+	local -i allow_unsigned="$6"
 
 	local output
 	local err
+	local -i signature_is_valid
 
 	err=0
+	signature_is_valid=0
 
 	if ! output=$(git clone "$repository" "$builddir/sources" 2>&1) ||
 	   ! output+=$(cd "$builddir/sources" 2>&1 && git checkout "$branch" 2>&1); then
 		err=1
+	fi
+
+	if output+=$(cd "$builddir/sources" 2>&1 && git verify-commit "$ref" 2>&1); then
+	        signature_is_valid=1
 	fi
 
 	if ! foundry_context_log "$context" "build" <<< "$output"; then
@@ -187,6 +194,11 @@ build() {
 	fi
 
 	if (( err != 0 )); then
+		return 1
+	fi
+
+	if (( signature_is_valid == 0 )) && (( allow_unsigned == 0 )); then
+		foundry_context_log "$context" "build" "Rejecting source without valid signature"
 		return 1
 	fi
 
@@ -257,6 +269,7 @@ handle_commit_message() {
 	local endpoint="$1"
 	local publish_to="$2"
 	local commit="$3"
+	local -i allow_unsigned="$4"
 
 	local buildable_branches
 	local repository
@@ -312,7 +325,7 @@ handle_commit_message() {
 	fi
 
 	log_info "Building $context in $builddir"
-	if ! build "$context" "$repository" "$branch" "$ref" "$builddir"; then
+	if ! build "$context" "$repository" "$branch" "$ref" "$builddir" "$allow_unsigned"; then
 		result=1
 	fi
 
@@ -334,6 +347,7 @@ dispatch_tasks() {
 	local endpoint_name="$1"
 	local watch="$2"
 	local publish_to="$3"
+	local -i allow_unsigned="$4"
 
 	local endpoint
 
@@ -371,22 +385,25 @@ dispatch_tasks() {
 
 		inst_set_status "Handling commit message"
 
-		handle_commit_message "$endpoint" "$publish_to" "$data"
+		handle_commit_message "$endpoint" "$publish_to" "$data" "$allow_unsigned"
 	done
 
 	return 0
 }
+
 
 main() {
 	local endpoint
 	local watch
 	local publish_to
 	local proto
+	local -i allow_unsigned
 
-	opt_add_arg "e" "endpoint"   "v" "pub/buildbot" "The IPC endpoint to listen on"
-	opt_add_arg "w" "watch"      "v" "commits"      "The topic to watch for commit messages"
-	opt_add_arg "p" "publish-to" "v" "builds"       "The topic to publish builds under"
-	opt_add_arg "P" "proto"      "v" "uipc"         "The IPC flavor to use"                  '^u?ipc$'
+	opt_add_arg "e" "endpoint"       "v" "pub/buildbot" "The IPC endpoint to listen on"
+	opt_add_arg "w" "watch"          "v" "commits"      "The topic to watch for commit messages"
+	opt_add_arg "p" "publish-to"     "v" "builds"       "The topic to publish builds under"
+	opt_add_arg "P" "proto"          "v" "uipc"         "The IPC flavor to use"                  '^u?ipc$'
+	opt_add_arg "U" "allow-unsigned" ""  0              "Don't refuse to build unsigned code"
 
 	if ! opt_parse "$@"; then
 		return 1
@@ -396,12 +413,13 @@ main() {
 	watch=$(opt_get "watch")
 	publish_to=$(opt_get "publish-to")
 	proto=$(opt_get "proto")
+	allow_unsigned=$(opt_get "allow-unsigned")
 
 	if ! include "$proto"; then
 		return 1
 	fi
 
-	if ! inst_start dispatch_tasks "$endpoint" "$watch" "$publish_to"; then
+	if ! inst_start dispatch_tasks "$endpoint" "$watch" "$publish_to" "$allow_unsigned"; then
 		return 1
 	fi
 
