@@ -75,6 +75,12 @@ handle_build_message() {
 		return 1
 	fi
 
+	if ! array_contains "$branch" "${sign_branches[@]}" &&
+	   ! array_contains "*"       "${sign_branches[@]}"; then
+		log_warn "Branch $branch not in list of to-sign branches"
+		return 0
+	fi
+
 	context_name="${repository##*/}"
 
 	if ! context=$(foundry_context_new "$context_name"); then
@@ -184,15 +190,21 @@ main() {
 	local publish_to
 	local key
 	local proto
+	declare -ag sign_branches
 
-	opt_add_arg "e" "endpoint"   "v"  "pub/signbot" "The IPC endpoint to listen on"
-	opt_add_arg "w" "watch"      "v"  "builds"      "The topic to watch for build messages"
-	opt_add_arg "p" "publish-to" "v"  "signs"       "The topic to publish signs under"
-	opt_add_arg "k" "gpg-key"    "rv" ""            "Fingerprint of the key to sign with"
-	opt_add_arg "P" "proto"      "v"  "uipc"        "The IPC flavor to use"                 '^u?ipc$'
+	opt_add_arg "e" "endpoint"    "v"  "pub/signbot" "The IPC endpoint to listen on"
+	opt_add_arg "w" "watch"       "v"  "builds"      "The topic to watch for build messages"
+	opt_add_arg "p" "publish-to"  "v"  "signs"       "The topic to publish signs under"
+	opt_add_arg "b" "sign-branch" "av" sign_branches "Sign packages from these branches"
+	opt_add_arg "k" "gpg-key"     "rv" ""            "Fingerprint of the key to sign with"
+	opt_add_arg "P" "proto"       "v"  "uipc"        "The IPC flavor to use"                 '^u?ipc$'
 
 	if ! opt_parse "$@"; then
 		return 1
+	fi
+
+	if (( ${#sign_branches[@]} == 0 )); then
+		sign_branches+=("*")
 	fi
 
 	endpoint=$(opt_get "endpoint")
