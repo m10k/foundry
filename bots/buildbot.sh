@@ -202,7 +202,7 @@ build() {
 		return 1
 	fi
 
-	if [[ "$branch" == "unstable" ]]; then
+	if array_contains "$branch" "${autobump_branches[@]}"; then
 		if ! prepend_changelog "$builddir/sources/debian/changelog" \
 		                       "$branch"                            \
 		                       "$ref"; then
@@ -271,7 +271,6 @@ handle_commit_message() {
 	local commit="$3"
 	local -i allow_unsigned="$4"
 
-	local buildable_branches
 	local repository
 	local branch
 	local ref
@@ -281,12 +280,6 @@ handle_commit_message() {
 	local -i result
 	local -i err
 
-	buildable_branches=(
-		"master"
-		"stable"
-		"testing"
-		"unstable"
-	)
 	result=0
 	err=0
 
@@ -295,8 +288,9 @@ handle_commit_message() {
 		return 1
 	fi
 
-	if ! array_contains "$branch" "${buildable_branches[@]}"; then
-		log_warn "Refusing to build from $branch branch"
+	if ! array_contains "$branch" "${build_branches[@]}" &&
+	   ! array_contains "*"       "${build_branches[@]}"; then
+		log_warn "Branch $branch not in list of to-build branches"
 		return 0
 	fi
 
@@ -398,15 +392,24 @@ main() {
 	local publish_to
 	local proto
 	local -i allow_unsigned
+	declare -ag build_branches
+        declare -ag autobump_branches
 
-	opt_add_arg "e" "endpoint"       "v" "pub/buildbot" "The IPC endpoint to listen on"
-	opt_add_arg "w" "watch"          "v" "commits"      "The topic to watch for commit messages"
-	opt_add_arg "p" "publish-to"     "v" "builds"       "The topic to publish builds under"
-	opt_add_arg "P" "proto"          "v" "uipc"         "The IPC flavor to use"                  '^u?ipc$'
-	opt_add_arg "U" "allow-unsigned" ""  0              "Don't refuse to build unsigned code"
+	opt_add_arg "e" "endpoint"       "v" "pub/buildbot"     "The IPC endpoint to listen on"
+	opt_add_arg "w" "watch"          "v" "commits"          "The topic to watch for commit messages"
+	opt_add_arg "p" "publish-to"     "v" "builds"           "The topic to publish builds under"
+	opt_add_arg "a" "autobump"       "av" autobump_branches "Automatically bump revision on branch"
+	opt_add_arg "b" "build-branch"   "av" build_branches    "Branch to build packages from"
+	opt_add_arg "P" "proto"          "v" "uipc"             "The IPC flavor to use"                  '^u?ipc$'
+	opt_add_arg "U" "allow-unsigned" ""  0                  "Don't refuse to build unsigned code"
 
 	if ! opt_parse "$@"; then
 		return 1
+	fi
+
+	if (( ${#build_branches[@]} == 0 )); then
+		# build all branches by default
+		build_branches+=("*")
 	fi
 
 	endpoint=$(opt_get "endpoint")
