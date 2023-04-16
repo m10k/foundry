@@ -357,15 +357,10 @@ watch_topics() {
 		return 1
 	fi
 
-	for topic in "${topics[@]}"; do
-		if ! ipc_endpoint_subscribe "$endpoint" "$topic"; then
-			log_error "Could not subscribe to $topic"
-			err=1
-			break
-		fi
-	done
-
-	if (( err == 0 )); then
+	if ! ipc_endpoint_subscribe "$endpoint" "${topics[@]}"; then
+		log_error "Could not subscribe to some topics"
+		err=1
+	else
 		handle_messages "$endpoint" "$channel" "$token"
 	fi
 
