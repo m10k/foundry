@@ -1,0 +1,234 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://m10k.eu/foundry/schema/msg.v2.schema.json",
+	"title": "Foundry V2 IPC Message",
+	"type": "object",
+
+	"properties": {
+		"version": {
+			"description": "Version of the foundry message format used",
+			"type": "integer"
+		},
+
+		"type": {
+			"description": "The message type encapsulated in this object",
+			"enum": [
+				"foundry.msg.source.new",
+				"foundry.msg.source.modified",
+				"foundry.msg.build.request"
+			]
+		}
+	},
+
+	"allOf": [
+		{
+			"if": {
+				"properties": {
+					"type": { "const": "foundry.msg.source.new" }
+				}
+			},
+			"then": {
+				"properties": {
+					"message": {
+						"$ref": "#/$defs/msg_source_new"
+					}
+				}
+			}
+		}, {
+			"if": {
+				"properties": {
+					"type": { "const": "foundry.msg.build.request" }
+				}
+			},
+			"then": {
+				"properties": {
+					"message": {
+						"$ref": "#/$defs/msg_build_request"
+					}
+				}
+			}
+		}
+	],
+
+	"required": [
+		"version",
+		"type",
+		"message"
+	],
+
+	"$defs": {
+		"msg_source_new": {
+			"description": "New source notification",
+			"type": "object",
+
+			"properties": {
+				"sources": {
+					"description": "The sources that have been detected",
+					"type": "array",
+					"items": {
+						"$ref": "#/$defs/sourceref"
+					},
+					"minItems": 1,
+					"uniqueItems": true
+				}
+			},
+			"required": [
+				"sources"
+			]
+		},
+		"msg_build_request": {
+			"description": "Build request message",
+			"type": "object",
+
+			"properties": {
+				"sources": {
+					"description": "The sources that are requested to be build",
+					"type": "array",
+					"items": {
+						"$ref": "#/$defs/sourceref"
+					},
+					"minItems": 1,
+					"uniqueItems": true
+				},
+
+				"distribution": {
+					"description": "The distribution for the build request",
+					"type": "string"
+				},
+
+				"architectures": {
+					"description": "The architectures for which the sources are requested to be built",
+					"type": "array",
+					"items": {
+						"$ref": "#/$defs/architecture"
+					},
+					"minItems": 1,
+					"uniqueItems": true
+				}
+			},
+
+			"required": [
+				"sources"
+			]
+		},
+
+		"sourceref": {
+			"description": "Reference to a package source",
+			"type": "object",
+
+			"properties": {
+				"type": {
+					"description": "The type of source that is referred to",
+					"enum": [
+						"git",
+						"srpm"
+					]
+				}
+			},
+
+			"allOf": [
+				{
+					"if": {
+						"properties": {
+							"type": { "const": "git" }
+						}
+					},
+					"then": {
+						"properties": {
+							"repository": {
+								"description": "URL of the git repository",
+								"type": "string",
+								"format": "uri"
+							},
+
+							"branch": {
+								"description": "Name of the branch that contains the referenced commit",
+								"type": "string"
+							},
+
+							"commit": {
+								"description": "Hex-encoded hash of the referenced commit",
+								"type": "string",
+								"pattern": "^[0-9a-fA-F]+$"
+							},
+
+							"uri": {
+								"description": "URI pointing to the referenced sources (ex: git+https://github.com/m10k/foundry@unstable)",
+								"type": "string",
+								"format": "uri"
+							}
+						}
+					}
+				}, {
+					"if": {
+						"properties": {
+							"type": { "const": "srpm" }
+						}
+					},
+					"then": {
+						"properties": {
+							"uri": {
+								"description": "The address from which the SRPM can be obtained",
+								"type": "string",
+								"format": "uri"
+							},
+
+							"checksums": {
+								"type": "array",
+								"items": { "$ref": "#/$defs/checksum" },
+								"minItems": 1,
+								"uniqueItems": true
+							},
+
+							"distribution": {
+								"description": "The distribution to which the SRPM belongs",
+								"type": "string"
+							}
+						}
+					}
+				}
+			],
+
+			"required": [
+				"type",
+				"uri"
+			]
+		},
+
+		"checksum": {
+			"description": "Generic description of a checksum",
+			"type": "object",
+
+			"properties": {
+				"algorithm": {
+					"description": "The algorithm used to compute the checksum",
+					"enum": [
+						"sha256",
+						"sha512"
+					]
+				},
+
+				"data": {
+					"description": "Checksum in hexadecimal encoding",
+					"type": "string",
+					"pattern": "^[0-9a-fA-F]+$"
+				}
+			},
+
+			"required": [
+				"algorithm",
+				"data"
+			]
+		},
+
+		"architecture": {
+			"description": "Architectures of a build request or artifact",
+			"enum": [
+				"i386",
+				"amd64",
+				"riscv64",
+				"arm64"
+			]
+		}
+	}
+}
