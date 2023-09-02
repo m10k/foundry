@@ -22,6 +22,7 @@ make_source_new_message() {
 
 	local sourceref_props
 	local sourceref
+	local -a sourcerefs
 	local checksum
 	local message
 
@@ -40,7 +41,9 @@ make_source_new_message() {
 		return 2
 	fi
 
-	foundry_msgv2_new "foundry.msg.source.new" "$sourceref"
+	sourcerefs=("$sourceref")
+
+	foundry_msgv2_new "foundry.msg.source.new" "sources" sourcerefs
 	return "$?"
 }
 
@@ -77,7 +80,9 @@ make_source_modified_message() {
 		return 2
 	fi
 
-	foundry_msgv2_new "foundry.msg.source.modified" "$new_sourceref" "$old_sourceref"
+	foundry_msgv2_new "foundry.msg.source.modified" \
+	                  "new" "$new_sourceref"        \
+	                  "old" "$old_sourceref"
 	return "$?"
 }
 
