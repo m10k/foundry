@@ -37,6 +37,19 @@
 		}, {
 			"if": {
 				"properties": {
+					"type": { "const": "foundry.msg.source.modified" }
+				}
+			},
+			"then": {
+				"properties": {
+					"message": {
+						"$ref": "#/$defs/msg_source_modified"
+					}
+				}
+			}
+		}, {
+			"if": {
+				"properties": {
 					"type": { "const": "foundry.msg.build.request" }
 				}
 			},
@@ -76,6 +89,31 @@
 				"sources"
 			]
 		},
+
+		"msg_source_modified": {
+			"description": "Notification that a source has been modified",
+			"type": "object",
+
+			"properties": {
+				"old": {
+					"description": "Sourceref before the modification was detected",
+					"type": {
+						"$ref": "#/$defs/sourceref"
+					}
+				},
+
+				"new": {
+					"description": "Sourceref after the modification was detected",
+					"type": {
+						"$ref": "#/$defs/sourceref"
+					}
+				}
+			},
+			"required": [
+				"new"
+			]
+		},
+
 		"msg_build_request": {
 			"description": "Build request message",
 			"type": "object",
