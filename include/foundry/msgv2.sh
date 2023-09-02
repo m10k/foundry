@@ -70,6 +70,17 @@ foundry_msgv2_get_buildrequest() {
 	return "$?"
 }
 
+foundry_msgv2_get_sourcepub() {
+	local message="$1"
+
+	if ! foundry_msgv2_is_type "$message" "foundry.msg.source.new"; then
+		return 2
+	fi
+
+	foundry_msgv2_get "$message" "message"
+	return "$?"
+}
+
 foundry_msgv2_new() {
 	local type="$1"
 	local args=("${@:2}")
