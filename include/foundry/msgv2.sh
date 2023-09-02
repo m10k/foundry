@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 __init() {
-	if ! include "log" "json"; then
+	if ! include "log" "json" "foundry/sourcepub" "foundry/sourcemod"; then
 		return 1
 	fi
 
@@ -115,10 +115,8 @@ foundry_msgv2_source_new_new() {
 }
 
 foundry_msgv2_source_modified_new() {
-	local new_sourceref="$1"
-	local old_sourceref="$2"
+	local args=("$@")
 
-	json_object "new" "$new_sourceref" \
-	            "old" "$old_sourceref"
+	foundry_sourcemod_new "${args[@]}"
 	return "$?"
 }
