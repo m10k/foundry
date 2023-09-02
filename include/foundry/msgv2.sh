@@ -79,6 +79,7 @@ foundry_msgv2_new() {
 
 	constructors["$type"]=foundry_msgv2_invalid
 	constructors["foundry.msg.source.new"]=foundry_msgv2_source_new_new
+	constructors["foundry.msg.source.modified"]=foundry_msgv2_source_modified_new
 
 	if ! message=$("${constructors[$type]}" "${args[@]}"); then
 		return 1
@@ -105,5 +106,14 @@ foundry_msgv2_source_new_new() {
 	fi
 
 	json_object "sources" "$sourcerefs_json"
+	return "$?"
+}
+
+foundry_msgv2_source_modified_new() {
+	local new_sourceref="$1"
+	local old_sourceref="$2"
+
+	json_object "new" "$new_sourceref" \
+	            "old" "$old_sourceref"
 	return "$?"
 }
