@@ -108,15 +108,9 @@ foundry_msgv2_invalid() {
 }
 
 foundry_msgv2_source_new_new() {
-	local sourcerefs=("$@")
+	local args=("$@")
 
-	local sourcerefs_json
-
-	if ! sourcerefs_json=$(json_array "${sourcerefs[@]}"); then
-		return 1
-	fi
-
-	json_object "sources" "$sourcerefs_json"
+	foundry_sourcepub_new "${args[@]}"
 	return "$?"
 }
 

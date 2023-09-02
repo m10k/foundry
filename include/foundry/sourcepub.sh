@@ -1,5 +1,36 @@
 __init() {
+	if ! include "foundry/vargs"; then
+		return 1
+	fi
+
 	return 0
+}
+
+foundry_sourcepub_new() {
+	local args=("$@")
+
+	local -a allowed_args
+	local -a required_args
+	local -A parsed_args
+	local -n ___sourcerefs
+	local sourcerefs_json
+
+	allowed_args=(
+		"sources"
+	)
+	required_args=(
+		"sources"
+	)
+
+	if ! foundry_vargs_parse args allowed_args required_args parsed_args; then
+		return 1
+	fi
+
+	___sourcerefs="${parsed_args[sources]}"
+	sourcerefs_json=$(json_array "${___sourcerefs[@]}")
+
+	json_object "sources" "$sourcerefs_json"
+	return "$?"
 }
 
 foundry_sourcepub_foreach_sourceref() {
