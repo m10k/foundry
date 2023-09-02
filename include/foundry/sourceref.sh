@@ -84,6 +84,16 @@ foundry_sourceref_srpm_new() {
 	return "$?"
 }
 
+foundry_sourceref_get_uri() {
+	local sourceref="$1"
+
+	if ! jq -e -r '.uri' <<< "$sourceref"; then
+		return 1
+	fi
+
+	return 0
+}
+
 foundry_sourceref_get_checksum() {
 	local sourceref="$1"
 
