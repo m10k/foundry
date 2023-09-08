@@ -129,6 +129,20 @@ notify_changed_package() {
 	return 0
 }
 
+url_is_local() {
+	local url="$1"
+
+	local url_without_proto
+
+	url_without_proto="${url#file://}"
+
+	if [[ "${url_without_proto:0:1}" == "/" ]]; then
+		return 0
+	fi
+
+	return 1
+}
+
 yumrepo_open() {
 	local repository="$1"
 
@@ -137,7 +151,11 @@ yumrepo_open() {
 
 	repomd_url="$repository/repodata/repomd.xml"
 
-	if ! repomd=$(curl --get --silent --location "$repomd_url"); then
+	if url_is_local "$repomd_url"; then
+		if ! repomd=$(< "$repomd_url"); then
+			return 1
+		fi
+	elif ! repomd=$(curl --get --silent --location "$repomd_url"); then
 		return 1
 	fi
 
@@ -207,7 +225,11 @@ yumrepo_get_md() {
 		return 1
 	fi
 
-	if ! curl --get --silent --location "$mdlocation" | "$decompressor"; then
+	if url_is_local "$mdlocation"; then
+	        if ! "$decompressor" < "$mdlocation"; then
+			return 1
+		fi
+	elif ! curl --get --silent --location "$mdlocation" | "$decompressor"; then
 		return 1
 	fi
 
