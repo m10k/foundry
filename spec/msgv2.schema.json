@@ -15,7 +15,8 @@
 			"enum": [
 				"foundry.msg.source.new",
 				"foundry.msg.source.modified",
-				"foundry.msg.build.request"
+				"foundry.msg.build.request",
+				"foundry.msg.build.result"
 			]
 		}
 	},
@@ -57,6 +58,19 @@
 				"properties": {
 					"message": {
 						"$ref": "#/$defs/msg_build_request"
+					}
+				}
+			}
+		}, {
+			"if": {
+				"properties": {
+					"type": { "const": "foundry.msg.build.result" }
+				}
+			},
+			"then": {
+				"properties": {
+					"message": {
+						"$ref": "#/$defs/msg_build_result"
 					}
 				}
 			}
@@ -147,6 +161,61 @@
 
 			"required": [
 				"sources"
+			]
+		},
+
+		"msg_build_result": {
+			"description": "Message containing the result of a build step",
+			"type": "object",
+
+			"properties": {
+				"status": {
+					"description": "Exit status of the build process",
+					"type": "integer"
+				},
+
+				"context": {
+					"description": "Context identifier",
+					"type": "string"
+				},
+
+				"builds": {
+					"description": "Results of each performed build",
+					"type": "array",
+					"items": {
+						"$ref": "#/$defs/build_result"
+					},
+					"minItems": 1,
+					"uniqueItems": true
+				},
+
+				"host": {
+					"description": "Name of the host that performed the build",
+					"type": {
+						"$ref": "#/$defs/hostinfo"
+					}
+				},
+
+				"process": {
+					"description": "Name of the process that performed the build",
+					"type": "string"
+				},
+
+				"stats": {
+					"description": "Statistics about the build process",
+					"type": {
+						"$ref": "#/$defs/build_stats"
+					}
+				}
+			},
+
+			"required": [
+				"status",
+				"context",
+				"builds",
+				"host",
+				"process",
+				"stats"
 			]
 		},
 
@@ -266,6 +335,169 @@
 				"amd64",
 				"riscv64",
 				"arm64"
+			]
+		},
+
+		"hostinfo": {
+			"description": "Basic information about a host",
+			"type": "object",
+
+			"properties": {
+				"name": {
+					"description": "FQDN of the host",
+					"type": "string"
+				},
+
+				"arch": {
+					"description": "Architecture of the host",
+					"type": {
+						"$ref": "#/$defs/architecture"
+					}
+				},
+
+				"machine": {
+					"description": "Architecture as reported by uname -m",
+					"type": "string"
+				},
+
+				"cpus": {
+					"description": "Number of CPUs in the machine",
+					"type": "integer"
+				},
+
+				"model": {
+					"description": "Human-readable description of the CPU",
+					"type": "string"
+				},
+
+				"memory": {
+					"description": "Total amount of memory (kB)",
+					"type": "integer"
+				}
+			},
+
+			"required": [
+				"name",
+				"arch",
+				"machine",
+				"cpus",
+				"model"
+			]
+		},
+
+		"build_result": {
+			"description": "Results of the build process",
+			"type": "object",
+
+			"properties": {
+				"sourceref": {
+					"description": "The sources that were built in the process",
+					"type": {
+						"$ref": "#/$defs/sourceref"
+					}
+				},
+
+				"files": {
+					"description": "The build results",
+					"type": "array",
+					"items": {
+						"$ref": "#/$defs/directory"
+					},
+					"minItems": 1,
+					"uniqueItems": true
+				}
+			},
+
+			"required": [
+				"sourceref",
+				"files"
+			]
+		},
+
+		"build_stats": {
+			"description": "Statistics about the build process",
+			"type": "object",
+
+			"properties": {
+				"start_time": {
+					"description": "Date and time when the build process started",
+					"type": "string",
+					"format": "date-time"
+				},
+
+				"end_time": {
+					"description": "Date and time when the build process finished",
+					"type": "string",
+					"format": "date-time"
+				},
+
+				"memory": {
+					"description": "Amount of memory (in KB) the build process used",
+					"type": "integer"
+				},
+
+				"disk": {
+					"description": "Amount of disk space (in KB) the build process used",
+					"type": "integer"
+				}
+			},
+
+			"required": [
+				"start_time",
+				"end_time",
+				"memory",
+				"disk"
+			]
+		},
+
+		"directory": {
+			"description": "Group of build results",
+			"type": "object",
+
+			"properties": {
+				"name": {
+					"description": "Name of the directory",
+					"type": "string"
+				},
+
+				"contents": {
+					"description": "Contents of the directory",
+					"type": "array",
+					"items": {
+						"$ref": "#/$defs/file"
+					},
+					"minItems": 1,
+					"uniqueItems": true
+				}
+			},
+
+			"required": [
+				"name",
+				"contents"
+			]
+		},
+
+		"file": {
+			"description": "File created by a build process",
+			"type": "object",
+
+			"properties": {
+				"name": {
+					"description": "Name of the file",
+					"type": "string"
+				},
+
+				"checksum": {
+					"description": "Checksum of the file",
+					"type": {
+						"$ref": "#/$defs/checksum"
+					}
+				}
+			},
+
+			"required": [
+				"name",
+				"checksum"
 			]
 		}
 	}
