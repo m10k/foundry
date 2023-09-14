@@ -44,19 +44,22 @@ foundry_msgv2_get_type() {
 
 foundry_msgv2_is_type() {
 	local message="$1"
-	local expected_type="$2"
+	local expected_types=("${@:2}")
 
+	local expected_type
 	local actual_type
 
 	if ! actual_type=$(foundry_msgv2_get_type "$message"); then
 		return 2
 	fi
 
-	if [[ "$actual_type" != "$expected_type" ]]; then
-		return 1
-	fi
+	for expected_type in "${expected_types[@]}"; do
+		if [[ "$actual_type" == "$expected_type" ]]; then
+			return 0
+		fi
+	done
 
-	return 0
+	return 1
 }
 
 foundry_msgv2_get_buildrequest() {
