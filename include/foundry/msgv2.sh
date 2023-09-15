@@ -84,6 +84,17 @@ foundry_msgv2_get_sourcepub() {
 	return "$?"
 }
 
+foundry_msgv2_get_sourcemod() {
+	local message="$1"
+
+	if ! foundry_msgv2_is_type "$message" "foundry.source.modified"; then
+		return 2
+	fi
+
+	foundry_msgv2_get "$message" "message"
+	return "$?"
+}
+
 foundry_msgv2_new() {
 	local type="$1"
 	local args=("${@:2}")
@@ -94,6 +105,7 @@ foundry_msgv2_new() {
 	constructors["$type"]=foundry_msgv2_invalid
 	constructors["foundry.msg.source.new"]=foundry_msgv2_source_new_new
 	constructors["foundry.msg.source.modified"]=foundry_msgv2_source_modified_new
+	constructors["foundry.msg.build.request"]=foundry_msgv2_build_request_new
 
 	if ! message=$("${constructors[$type]}" "${args[@]}"); then
 		return 1
@@ -121,5 +133,12 @@ foundry_msgv2_source_modified_new() {
 	local args=("$@")
 
 	foundry_sourcemod_new "${args[@]}"
+	return "$?"
+}
+
+foundry_msgv2_build_request_new() {
+	local args=("$@")
+
+	foundry_buildrequest_new "${args[@]}"
 	return "$?"
 }
