@@ -23,6 +23,25 @@ __init() {
 	return 0
 }
 
+foundry_checksum_new_from_file() {
+	local algorithm="$1"
+	local file="$2"
+
+	local generator
+	local checksum
+
+	generator="${__foundry_checksum_generators[$algorithm]}"
+
+	if [[ -z "$generator" ]]; then
+		return 1
+	fi
+
+	checksum=$("$generator" "$file" | cut -d ' ' -f 1)
+
+	json_object "algorithm" "$algorithm" \
+	            "data"      "$checksum"
+	return "$?"
+}
 
 foundry_checksum_new() {
 	local props=("$@")
