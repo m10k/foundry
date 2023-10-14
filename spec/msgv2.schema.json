@@ -448,7 +448,7 @@
 		},
 
 		"directory": {
-			"description": "Group of build results",
+			"description": "A directory containing files and other directories",
 			"type": "object",
 
 			"properties": {
@@ -457,20 +457,29 @@
 					"type": "string"
 				},
 
-				"contents": {
+				"directories": {
+					"description": "Nested directories",
+					"type": "array",
+					"items": {
+						"$ref": "#/$defs/directory"
+					},
+					"uniqueItems": true
+				},
+
+				"files": {
 					"description": "Contents of the directory",
 					"type": "array",
 					"items": {
 						"$ref": "#/$defs/file"
 					},
-					"minItems": 1,
 					"uniqueItems": true
 				}
 			},
 
 			"required": [
 				"name",
-				"contents"
+				"directories",
+				"files"
 			]
 		},
 
