@@ -15,7 +15,18 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 __init() {
-	if ! include "log" "json" "foundry/sourcepub" "foundry/sourcemod"; then
+	local -a deps
+
+	deps=(
+		"log"
+		"json"
+		"foundry/sourcepub"
+		"foundry/sourcemod"
+		"foundry/buildrequest"
+		"foundry/buildresult"
+	)
+
+	if ! include "${deps[@]}"; then
 		return 1
 	fi
 
@@ -62,6 +73,17 @@ foundry_msgv2_is_type() {
 	return 1
 }
 
+foundry_msgv2_get_buildresult() {
+	local message="$1"
+
+	if ! foundry_msgv2_is_type "$message" "foundry.msg.build.result"; then
+		return 2
+	fi
+
+	foundry_msgv2_get "$message" "message"
+	return "$?"
+}
+
 foundry_msgv2_get_buildrequest() {
 	local message="$1"
 
@@ -106,6 +128,7 @@ foundry_msgv2_new() {
 	constructors["foundry.msg.source.new"]=foundry_msgv2_source_new_new
 	constructors["foundry.msg.source.modified"]=foundry_msgv2_source_modified_new
 	constructors["foundry.msg.build.request"]=foundry_msgv2_build_request_new
+	constructors["foundry.msg.build.result"]=foundry_msgv2_build_result_new
 
 	if ! message=$("${constructors[$type]}" "${args[@]}"); then
 		return 1
@@ -140,5 +163,12 @@ foundry_msgv2_build_request_new() {
 	local args=("$@")
 
 	foundry_buildrequest_new "${args[@]}"
+	return "$?"
+}
+
+foundry_msgv2_build_result_new() {
+	local args=("$@")
+
+	foundry_buildresult_new "${args[@]}"
 	return "$?"
 }
