@@ -46,6 +46,12 @@ foundry_directory_new() {
 	return "$?"
 }
 
+foundry_directory_get_name() {
+	local directory="$1"
+
+	jq -r -e ".name" <<< "$directory"
+}
+
 foundry_directory_foreach_file() {
 	local directory="$1"
 	local userfunc="$2"
@@ -105,5 +111,53 @@ foundry_directory_foreach_directory() {
 		fi
 	done
 
+	return 0
+}
+
+_foundry_directory_print_file() {
+	local file="$1"
+	local prefix="$2"
+
+	local name
+
+	if ! name=$(foundry_file_get_name "$file"); then
+		return 1
+	fi
+
+	if [[ -n "$prefix" ]]; then
+		printf '%s/' "$prefix"
+	fi
+
+	printf '%s\n' "$name"
+	return "$?"
+}
+
+foundry_directory_listing() {
+	local directory="$1"
+	local prefix="$2"
+
+	local file
+	local name
+	local new_prefix
+
+	if ! name=$(foundry_directory_get_name "$directory"); then
+		return 1
+	fi
+
+	if [[ -n "$prefix" ]]; then
+		new_prefix="$prefix/$name"
+	else
+		new_prefix="$name"
+	fi
+
+	if ! foundry_directory_foreach_file "$directory" \
+	                                    _foundry_directory_print_file "$new_prefix"; then
+		return 1
+	fi
+
+	if ! foundry_directory_foreach_directory "$directory" \
+	                                         foundry_directory_listing "$new_prefix"; then
+		return 1
+	fi
 	return 0
 }
