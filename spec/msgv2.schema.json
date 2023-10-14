@@ -280,11 +280,11 @@
 								"format": "uri"
 							},
 
-							"checksums": {
-								"type": "array",
-								"items": { "$ref": "#/$defs/checksum" },
-								"minItems": 1,
-								"uniqueItems": true
+							"checksum": {
+								"description": "The checksum of the SRPM file",
+								"type": {
+									"$ref": "#/$defs/checksum"
+								}
 							},
 
 							"distribution": {
