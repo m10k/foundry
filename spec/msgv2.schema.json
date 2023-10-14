@@ -397,20 +397,17 @@
 					}
 				},
 
-				"files": {
+				"artifacts": {
 					"description": "The build results",
-					"type": "array",
-					"items": {
+					"type": {
 						"$ref": "#/$defs/directory"
-					},
-					"minItems": 1,
-					"uniqueItems": true
+					}
 				}
 			},
 
 			"required": [
 				"sourceref",
-				"files"
+				"artifacts"
 			]
 		},
 
