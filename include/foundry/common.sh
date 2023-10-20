@@ -85,6 +85,8 @@ foundry_common_make_endpoint() {
 	if ! ipc_endpoint_subscribe "$endpoint" "${topics[@]}"; then
 		log_error "Could not subscribe $endpoint to some of the topics in ${topics[*]}"
 		err=1
+	else
+		echo "$endpoint"
 	fi
 
 	if (( err != 0 )) &&
@@ -93,6 +95,5 @@ foundry_common_make_endpoint() {
 		ipc_endpoint_close "$endpoint"
 	fi
 
-	echo "$endpoint"
 	return "$err"
 }
