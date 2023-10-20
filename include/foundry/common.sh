@@ -88,7 +88,7 @@ foundry_common_make_endpoint() {
 	fi
 
 	if (( err != 0 )) &&
-	   [[ -n "$endpoint_name" ]]; then
+	   [[ -z "$endpoint_name" ]]; then
 		# Close endpoint if it doesn't have a name (i.e. it isn't part of a team)
 		ipc_endpoint_close "$endpoint"
 	fi
