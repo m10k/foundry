@@ -102,6 +102,216 @@ gather_srpms() {
 	return 0
 }
 
+trim() {
+	local input
+	local re
+
+	re='^\s*(.*)\s*$'
+
+	while IFS='' read -r input; do
+		if [[ "$input" =~ $re ]]; then
+			printf '%s\n' "${BASH_REMATCH[1]}"
+		fi
+	done
+
+	return 0
+}
+
+process_is_running() {
+	local -i pid="$1"
+
+	if ps -p "$pid" &>/dev/null; then
+		return 0
+	fi
+
+	return 1
+}
+
+process_get_memory_usage() {
+	local -i pid="$1"
+
+	local mem
+
+	if ! mem=$(ps -eo vsize -h "$pid"); then
+		return 1
+	fi
+
+	trim <<< "$mem"
+	return 0
+}
+
+process_get_children() {
+	local -i pid="$1"
+
+	ps -o pid -h --ppid "$pid" | trim
+}
+
+process_family_get_memory_usage() {
+	local -i pid="$1"
+
+	local -i mem_used
+
+	if mem_used=$(process_get_memory_usage "$pid"); then
+		local -i child
+
+		while read -r child; do
+			local -i mem_child
+
+			if ! mem_child=$(process_family_get_memory_usage "$child"); then
+				continue
+			fi
+
+			(( mem_used += mem_child ))
+		done < <(process_get_children "$pid")
+	fi
+
+	echo "$mem_used"
+	return 0
+}
+
+directory_get_disk_usage() {
+	local dir="$1"
+
+	if [[ -n "$dir" ]]; then
+		du -s "$dir" 2>/dev/null | grep -oP '^[0-9]+'
+	else
+		echo "0"
+	fi
+}
+
+filter_option_value() {
+	local options=("$@")
+
+	local option
+	local arg
+	local -i print_next
+
+	print_next=0
+
+	while IFS='' read -r arg; do
+		if (( print_next == 1 )); then
+			printf '%s\n' "$arg"
+			return 0
+		fi
+
+		for option in "${options[@]}"; do
+                        if [[ "$arg" == "$option" ]]; then
+				# value is in the next arg
+				print_next=1
+			elif [[ "$arg" == "$option="* ]]; then
+				# value is in this arg, after the '='
+				printf '%s\n' "${option#*=}"
+				return "$?"
+			fi
+		done
+	done
+
+	return 1
+}
+
+get_buildroot_from_mock() {
+	local -a command=("$@")
+
+	local root
+
+	if ! root=$(array_to_lines "${command[@]}" | filter_option_value "-r" "--root"); then
+		return 1
+	fi
+
+	mock -r "$root" --print-root-path
+	return "$?"
+}
+
+command_is_mock() {
+	local command=("$@")
+
+	local mock_re
+
+	# Might be /usr/bin/mock, /usr/libexec/mock/mock, etc
+	mock_re='/usr/[^ ]+/mock'
+
+	if [[ "${command[*]}" =~ $mock_re ]]; then
+		return 0
+	fi
+
+	return 1
+}
+
+get_buildroot() {
+	local command=("$@")
+
+	if command_is_mock "${command[@]}"; then
+		get_buildroot_from_mock "${command[@]}"
+		return "$?"
+	fi
+
+	return 1
+}
+
+process_get_argv() {
+	local -i pid="$1"
+
+	tr '\0' '\n' < "/proc/$pid/cmdline" 2>/dev/null
+	return "$?"
+}
+
+find_mock_root() {
+	local -i pid="$1"
+
+	local -a command
+	local -i child
+
+	if readarray -t command < <(process_get_argv "$pid") &&
+	   get_buildroot "${command[@]}"; then
+		return 0
+	fi
+
+	while read -r child; do
+		if find_mock_root "$child"; then
+			return 0
+		fi
+	done < <(process_get_children "$pid")
+
+	return 1
+}
+
+monitor_build_resources() {
+	local -i pid="$1"
+
+	local -i mem_max
+	local -i disk_max
+	local disk_path
+
+	mem_max=0
+	disk_max=0
+	disk_path=""
+
+	while process_is_running "$pid"; do
+		local -i mem_now
+		local -i disk_now
+
+		if mem_now=$(process_family_get_memory_usage "$pid") &&
+		   (( mem_now > mem_max )); then
+			mem_max="$mem_now"
+		fi
+
+		if [[ -z "$disk_path" ]] &&
+		   disk_path=$(find_mock_root "$pid"); then
+			log_info "Found buildroot of mock $pid in $disk_path"
+		fi
+
+		if disk_now=$(directory_get_disk_usage "$disk_path") &&
+		   (( disk_now > disk_max )); then
+			disk_max="$disk_now"
+		fi
+
+		sleep 15
+	done
+
+	printf '%d %d\n' "$mem_max" "$disk_max"
+	return 0
+}
+
 build_in_context() {
 	local context="$1"
 	local srpms=("${@:2}")
@@ -111,6 +321,10 @@ build_in_context() {
 	local resultdir
 	local logdir
 	local -a args
+	local -i status
+	local -i mock_pid
+	local -i memory_kb
+	local -i disk_kb
 
 	context_root=$(foundry_context_get_root)
 	mock_config="$context_root/$context/mock.cfg"
@@ -136,17 +350,27 @@ build_in_context() {
 	fi
 
 	log_info "Executing: mock ${args[*]} 1> $logdir/mock.stdout 2> $logdir/mock.stderr"
-	if ! mock "${args[@]}"        \
-	     1> "$logdir/mock.stdout" \
-	     2> "$logdir/mock.stderr"; then
-		return 1
-	fi
+	mock "${args[@]}" 1> "$logdir/mock.stdout" 2> "$logdir/mock.stderr" &
+	mock_pid="$!"
+
+	read -r memory_kb disk_kb < <(monitor_build_resources "$mock_pid")
+
+	wait "$mock_pid"
+	status="$?"
 
 	if ! foundry_timestamp_now > "$context_root/$context/stats_end"; then
 		log_error "Could not write end time to $context_root/$context/stats_end"
 	fi
 
-	return 0
+	if ! echo "$memory_kb" > "$context_root/$context/stats_memory"; then
+		log_error "Could not write memory usage to $context_root/$context/stats_memory"
+	fi
+
+	if ! echo "$disk_kb" > "$context_root/$context/stats_disk"; then
+		log_error "Could not write disk usage to $context_root/$context/stats_disk"
+	fi
+
+	return "$status"
 }
 
 uri_to_nvr() {
@@ -156,7 +380,7 @@ uri_to_nvr() {
 	local nvr
 
 	file="${uri##*/}"
-        nvr="${file%.*.*}"
+	nvr="${file%.*.*}"
 
 	echo "$nvr"
 }
@@ -170,8 +394,6 @@ context_collect_build() {
 	local pkg_nvr
 	local result_dir
 	local build
-
-	log_info "___builds = $3"
 
 	if ! pkg_uri=$(foundry_sourceref_get_uri "$sourceref"); then
 		return 1
@@ -197,7 +419,7 @@ context_collect_builds() {
 	local request="$2"
 	local builds_ref="$3"
 
-	log_info "Collecting builds in context $context (ref: $builds_ref)"
+	log_info "Collecting builds in context $context"
 
 	# Generate one build result for each sourceref
 	if ! foundry_buildrequest_foreach_sourceref "$request"            \
@@ -216,6 +438,8 @@ context_collect_stats() {
 	local context_dir
 	local start_time
 	local end_time
+	local -i memory_kb
+	local -i disk_kb
 
 	context_dir="$(foundry_context_get_root)/$context"
 	if ! start_time=$(< "$context_dir/stats_start"); then
@@ -226,10 +450,18 @@ context_collect_stats() {
 		end_time=$(foundry_timestamp_from_unix 0)
 	fi
 
+	if ! memory_kb=$(< "$context_dir/stats_memory"); then
+		memory_kb=0
+	fi
+
+	if ! disk_kb=$(< "$context_dir/stats_disk"); then
+		disk_kb=0
+	fi
+
 	foundry_stats_new "start_time" "$start_time" \
 	                  "end_time"   "$end_time"   \
-	                  "memory"     0 \
-	                  "disk"       0
+	                  "memory"     "$memory_kb"  \
+	                  "disk"       "$disk_kb"
 	return "$?"
 }
 
@@ -412,9 +644,8 @@ handle_build_request() {
 
 	inst_set_status "Building: ${srpms[*]}"
 	log_info "Starting build"
-	if ! build_in_context "$context" "${srpms[@]}"; then
-		build_status=1
-	fi
+	build_in_context "$context" "${srpms[@]}"
+	build_status="$?"
 
 	inst_set_status "Finalizing: ${srpms[*]}"
 	log_info "Propagating build result"
@@ -517,6 +748,7 @@ main() {
 {
 	if ! . toolbox.sh ||
 	   ! include "log" "opt" "inst"     \
+	             "array"                \
 	             "foundry/common"       \
 	             "foundry/context"      \
 	             "foundry/msgv2"        \
