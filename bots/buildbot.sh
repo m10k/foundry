@@ -112,6 +112,8 @@ prepend_changelog() {
 }
 
 prepare_buildroot() {
+	local repository
+	local keyring
 	local args
 
 	if [ -f /var/cache/pbuilder/base.tgz ]; then
@@ -125,6 +127,21 @@ prepare_buildroot() {
 		# Necessary when building debian buildroots on devuan
 		--debootstrapopts "--exclude=devuan-keyring,devuan-baseconf"
 	)
+
+	for repository in "${extra_repositories[@]}"; do
+		# We need to install apt-transport-https and ca-certificates if the repository
+		# uses https, but installing them with --extrapackages doesn't seem to work. I
+		# will add support for https repositories once I find a workaround.
+		args+=(
+			--othermirror "deb $repository"
+		)
+	done
+
+	for keyring in "${extra_keyrings[@]}"; do
+		args+=(
+			--keyring "$keyring"
+		)
+	done
 
 	if ! sudo pbuilder create "${args[@]}"; then
 		return 1
@@ -394,14 +411,20 @@ main() {
 	local -i allow_unsigned
 	declare -ag build_branches
         declare -ag autobump_branches
+	declare -ag extra_repositories
+	declare -ag extra_keyrings
 
-	opt_add_arg "e" "endpoint"       "v" "pub/buildbot"     "The IPC endpoint to listen on"
-	opt_add_arg "w" "watch"          "v" "commits"          "The topic to watch for commit messages"
-	opt_add_arg "p" "publish-to"     "v" "builds"           "The topic to publish builds under"
-	opt_add_arg "a" "autobump"       "av" autobump_branches "Automatically bump revision on branch"
-	opt_add_arg "b" "build-branch"   "av" build_branches    "Branch to build packages from"
-	opt_add_arg "P" "proto"          "v" "uipc"             "The IPC flavor to use"                  '^u?ipc$'
-	opt_add_arg "U" "allow-unsigned" ""  0                  "Don't refuse to build unsigned code"
+	opt_add_arg "e" "endpoint"       "v" "pub/buildbot"      "The IPC endpoint to listen on"
+	opt_add_arg "w" "watch"          "v" "commits"           "The topic to watch for commit messages"
+	opt_add_arg "p" "publish-to"     "v" "builds"            "The topic to publish builds under"
+	opt_add_arg "a" "autobump"       "av" autobump_branches  "Automatically bump revision on branch"
+	opt_add_arg "b" "build-branch"   "av" build_branches     "Branch to build packages from"
+	opt_add_arg "P" "proto"          "v" "uipc"              "The IPC flavor to use"                   \
+	            '^u?ipc$'
+	opt_add_arg "U" "allow-unsigned" ""  0                   "Don't refuse to build unsigned code"
+	opt_add_arg "r" "repository"     "av" extra_repositories "Additional repository to use for builds" \
+	            '^([^ ]+) ([^ ]+)( [^ ]+)+$'
+	opt_add_arg "k" "keyring"        "av" extra_keyrings     "Additional GPG keyrings to use"
 
 	if ! opt_parse "$@"; then
 		return 1
