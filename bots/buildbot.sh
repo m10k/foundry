@@ -112,15 +112,28 @@ prepend_changelog() {
 }
 
 prepare_buildroot() {
+	local branch="$1"
+
+	local basedir
+	local basetgz
 	local repository
 	local keyring
 	local args
 
-	if [ -f /var/cache/pbuilder/base.tgz ]; then
+	basedir="/var/cache/pbuilder/$branch"
+	basetgz="$basedir/base.tgz"
+
+	if [ -f "$basetgz" ]; then
 		return 0
 	fi
 
+	if ! mkdir -p "$basedir"; then
+		log_error "Could not create $basedir"
+		return 1
+	fi
+
 	args=(
+		--basetgz         "$basetgz"
 		--distribution    "stable"
 		--mirror          "http://ftp.debian.org/debian"
 		--debootstrapopts "--keyring=/usr/share/keyrings/debian-archive-keyring.gpg"
@@ -152,11 +165,12 @@ prepare_buildroot() {
 
 build_deb_in_builddir() {
 	local builddir="$1"
+	local branch="$2"
 
 	local -i no_packages
 	local dsc
 
-	if ! prepare_buildroot; then
+	if ! prepare_buildroot "$branch"; then
 		return 1
 	fi
 
@@ -228,7 +242,7 @@ build() {
 		fi
 	fi
 
-	if ! output=$(build_deb_in_builddir "$builddir"); then
+	if ! output=$(build_deb_in_builddir "$builddir" "$branch"); then
 		err=1
 	fi
 
