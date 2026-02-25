@@ -119,7 +119,9 @@ prepare_buildroot() {
 	local repository
 	local keyring
 	local args
+	local -i have_https_repo
 
+	have_https_repo=0
 	basedir="/var/cache/pbuilder/$branch"
 	basetgz="$basedir/base.tgz"
 
@@ -142,9 +144,10 @@ prepare_buildroot() {
 	)
 
 	for repository in "${extra_repositories[@]}"; do
-		# We need to install apt-transport-https and ca-certificates if the repository
-		# uses https, but installing them with --extrapackages doesn't seem to work. I
-		# will add support for https repositories once I find a workaround.
+		if [[ "$repository" == "https://"* ]]; then
+			have_https_repo=1
+		fi
+
 		args+=(
 			--othermirror "deb $repository"
 		)
@@ -156,6 +159,14 @@ prepare_buildroot() {
 		)
 	done
 
+	if (( have_https_repo == 1 )); then
+		args+=(
+			--extrapackages apt-transport-https
+			--extrapackages ca-certificates
+		)
+	fi
+
+	log_info "Executing sudo pbuilder create ${args[*]}"
 	if ! sudo pbuilder create "${args[@]}"; then
 		return 1
 	fi
