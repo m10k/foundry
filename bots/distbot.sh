@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # distbot.sh - Foundry Debian repository management bot
-# Copyright (C) 2021-2023 Matthias Kruk
+# Copyright (C) 2021-2026 Matthias Kruk
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -38,14 +38,33 @@ repo_init() {
 	local repo="$1"
 	local domain="$2"
 	local arch="$3"
-	local gpgkeyid="$4"
+	local gpgkeyring="$4"
 	local description="$5"
 	local codenames=("${@:6}")
 
 	local codename
+	local gpgkey
+	local keyring_path
 
 	if ! mkdir -p "$repo/conf" "$repo/incoming" "$repo/failed" &>/dev/null; then
 		log_error "Could not create directory structure in $repo"
+		return 1
+	fi
+
+	keyring_path=$(gpg_keyring_get_path "$gpgkeyring")
+
+	if ! gpgkey=$(gpg_keyring_get_key "$gpgkeyring" "distbot"); then
+		log_error "Could not get key \"distbot\" from keyring $gpgkeyring"
+		return 1
+	fi
+
+	if ! gpg_keyring_export_key "$gpgkeyring" "distbot" > "$repo/key.gpg"; then
+		log_error "Could not place public key \"distbot\" from keyring $gpgkeyring in $repo"
+		return 1
+	fi
+
+	if ! printf 'gnupghome %s\n' "$keyring_path" > "$repo/conf/options"; then
+		log_error "Could not write to $repo/conf/options"
 		return 1
 	fi
 
@@ -53,12 +72,50 @@ repo_init() {
 		local config
 
 		config=$(make_repo_config "$domain" "$codename" "$arch" \
-	                                  "$gpgkeyid" "$description")
+	                                  "$gpgkey" "$description")
 
 		if ! printf "%s\n\n" "$config" >> "$repo/conf/distributions"; then
 			return 1
 		fi
 	done
+
+	return 0
+}
+
+repo_set_key() {
+	local repo="$1"
+	local gpgkeyid="$2"
+	local keyring="$3"
+
+	local err
+
+	if ! gpg_keyring_export_key "$keyring" "$gpgkeyid" > "$repo/key.gpg"; then
+		log_error "Could not place GPG key in $repo"
+		return 1
+	fi
+
+	if ! err=$(sed --in-place --expression "s/^SignWith:.*$/SignWith: $gpgkeyid/" \
+		       "$repo/conf/distributions" 2>&1); then
+		log_error "Could not update repository configuration"
+		log_highlight "sed output" <<< "$err" | log_error
+		return 1
+	fi
+
+	if ! err=$(reprepro --basedir "$repo" export 2>&1); then
+		log_error "Could not re-export repository"
+		log_highlight "reprepro output" <<< "$err" | log_error
+		return 1
+	fi
+
+	return 0
+}
+
+repo_get_key() {
+	local repo="$1"
+
+	if ! grep -oP '^SignWith: \K[0-9a-fA-F]+' "$repo/conf/distributions"; then
+		return 1
+	fi
 
 	return 0
 }
@@ -80,14 +137,18 @@ repo_add_package() {
 
 verify_package() {
 	local package="$1"
+	local keyring="$2"
 
+	local keyring_path
 	local output
 	local -i retval
 	local -a result
 
-	log_info "Verifying signature on $package"
+	keyring_path=$(gpg_keyring_get_path "$keyring")
 
-	output=$(dpkg-sig --verify "$package" 2>&1)
+	log_info "Verifying signature on $package using keyring $keyring ($keyring_path)"
+
+	output=$(GNUPGHOME="$keyring_path" dpkg-sig --batch=1 --verify "$package" 2>&1)
 	retval="$?"
 
 	result["$retval"]="Invalid"
@@ -104,6 +165,7 @@ process_new_package() {
 	local package="$2"
 	local repo="$3"
 	local codename="$4"
+	local keyring="$5"
 
 	local failed
 	local logoutput
@@ -112,7 +174,7 @@ process_new_package() {
 
 	log_info "[#$context] New package: $package"
 
-	if ! logoutput=$(verify_package "$package" 2>&1); then
+	if ! logoutput=$(verify_package "$package" "$keyring" 2>&1); then
 		log_error "[#$context] Invalid signature on package $package"
 	elif ! logoutput+=$(repo_add_package "$repo" "$codename" "$package" 2>&1); then
 		log_error "[#$context] Could not process $package"
@@ -172,6 +234,7 @@ process_sign_message() {
 	local signmsg="$2"
 	local endpoint="$3"
 	local publish_to="$4"
+	local keyring="$5"
 
 	local artifacts
 	local artifact
@@ -208,7 +271,7 @@ process_sign_message() {
 			continue
 		fi
 
-		if process_new_package "$context" "$artifact" "$repo" "$codename"; then
+		if process_new_package "$context" "$artifact" "$repo" "$codename" "$keyring"; then
 			distributed+=("$artifact_name")
 		else
 			log_error "Could not distribute $artifact_name"
@@ -229,13 +292,71 @@ process_sign_message() {
 	return 0
 }
 
+renew_key_if_needed() {
+	local repo="$1"
+	local keyring="$2"
+	local name="$3"
+	local email="$4"
+	local comment="$5"
+	local keylength="$6"
+	local validity="$7"
+
+	local repokey
+	local -i expiration
+	local newkey
+
+	if ! repokey=$(repo_get_key "$repo"); then
+		log_error "Could not determine signing key for repo $repo"
+		return 1
+	fi
+
+	if ! expiration=$(gpg_keyring_get_key_expiration "$keyring" "$repokey"); then
+		log_error "Could not determine expiration of key $repokey in $keyring"
+		return 1
+	fi
+
+	if (( expiration == 0 || expiration > 86400 )); then
+		# Key does not expire or has more than 1 day of validity left
+		return 0
+	fi
+
+	log_info "Key $repokey will expire in less than one day. Renewing."
+	if ! newkey=$(gpg_keyring_generate_key "$keyring" "distbot" "$name" "$email" \
+	                                       "$comment" "$keylength" "$validity"); then
+		log_error "Could not generate new key (keyring $keyring)"
+		return 1
+	fi
+
+	log_info "Rotating signing key of repository $repo"
+	if ! repo_set_key "$repo" "$newkey" "$keyring"; then
+		log_error "Could not rotate repo key"
+		return 1
+	fi
+
+	return 0
+}
+
 watch_new_packages() {
 	local endpoint_name="$1"
 	local watch="$2"
 	local publish_to="$3"
 	local repo="$4"
 
+	local gpg_keyring
+	local gpg_name
+	local gpg_email
+	local gpg_keylen
+	local gpg_keyexpiry
+	local repo_name
+
 	local endpoint
+
+	gpg_keyring=$(opt_get "gpg-keyring")
+	gpg_name=$(opt_get "gpg-name")
+	gpg_email=$(opt_get "gpg-email")
+	gpg_keylen=$(opt_get "gpg-keylength")
+	gpg_keyexpiry=$(opt_get "gpg-keyexpiry")
+	repo_name=$(opt_get "name")
 
 	if ! endpoint=$(ipc_endpoint_open "$endpoint_name"); then
 		log_error "Could not listen on IPC endpoint $endpoint_name"
@@ -251,6 +372,13 @@ watch_new_packages() {
 		local msg
 		local signmsg
 		local msgtype
+
+		if ! renew_key_if_needed "$repo" "$gpg_keyring" "$gpg_name" "$gpg_email"   \
+		                         "$repo_name Repository Housekeeper" "$gpg_keylen" \
+		                         "$gpg_keyexpiry"; then
+			log_error "Could not renew GPG key"
+			break
+		fi
 
 		inst_set_status "Waiting for sign messages"
 
@@ -273,7 +401,7 @@ watch_new_packages() {
 			continue
 		fi
 
-		process_sign_message "$repo" "$signmsg" "$endpoint" "$publish_to"
+		process_sign_message "$repo" "$signmsg" "$endpoint" "$publish_to" "$gpg_keyring"
 	done
 
 	return 0
@@ -336,29 +464,42 @@ main() {
 	local publish_to
 	local name
 	local architectures
+	local gpgname
+	local gpgemail
+	local gpgkeyring
 	local gpgkey
+	local gpgkeylen
+	local gpgkeyexpiry
 	local desc
 	local proto
 
 	architectures=()
 
-	opt_add_arg "e" "endpoint"    "v"  "pub/distbot" "The IPC endpoint to listen on"
-	opt_add_arg "w" "watch"       "v"  "signs"       \
+	opt_add_arg "e" "endpoint"      "v"  "pub/distbot" "The IPC endpoint to listen on"
+	opt_add_arg "w" "watch"         "v"  "signs"       \
 		    "The topic to watch for sign messages"
-	opt_add_arg "p" "publish-to"  "v"  "dists"       \
+	opt_add_arg "p" "publish-to"    "v"  "dists"       \
 		    "The topic to publish dist messages under"
 
-	opt_add_arg "n" "name"        "rv" ""            "The name of the repository"
-	opt_add_arg "o" "output"      "rv" ""            "The path to the repository"
-	opt_add_arg "c" "codename"    "rv" ""            \
+	opt_add_arg "n" "name"          "rv" ""            "The name of the repository"
+	opt_add_arg "o" "output"        "rv" ""            "The path to the repository"
+	opt_add_arg "c" "codename"      "rv" ""            \
 		    "Distribution codename (may be used more than once)"   "" _add_codename
-	opt_add_arg "a" "arch"        "rv" ""            \
+	opt_add_arg "a" "arch"          "rv" ""            \
 		    "Repository architecture (may be used more than once)" "" _add_arch
-	opt_add_arg "k" "gpg-key"     "rv" ""            \
-		    "The GPG key used for signing"
-	opt_add_arg "d" "description" "rv" ""            \
+	opt_add_arg "N" "gpg-name"      "v"  "Distbot"     \
+		    "Name of the builder"
+	opt_add_arg "E" "gpg-email"     "rv" ""            \
+		    "Email address of the builder"
+	opt_add_arg "G" "gpg-keyring"   "v"  "foundry"     \
+		    "The GPG keyring to use"
+	opt_add_arg "L" "gpg-keylength" "v"  4096          \
+	            "The keylength of repository signing keys"
+	opt_add_arg "X" "gpg-keyexpiry" "v"  "10y"         \
+	            "The validity period of repository signing keys"
+	opt_add_arg "d" "description"   "rv" ""            \
 		    "Description of the repository"
-	opt_add_arg "P" "proto"       "v"  "uipc"        \
+	opt_add_arg "P" "proto"         "v"  "uipc"        \
 	            "The IPC flavor to use" '^u?ipc$'
 
 	if ! opt_parse "$@"; then
@@ -370,7 +511,11 @@ main() {
 	watch=$(opt_get "watch")
 	publish_to=$(opt_get "publish-to")
 	name=$(opt_get "name")
-	gpgkey=$(opt_get "gpg-key")
+        gpgname=$(opt_get "gpg-name")
+	gpgemail=$(opt_get "gpg-email")
+	gpgkeyring=$(opt_get "gpg-keyring")
+	gpgkeylen=$(opt_get "gpg-keylength")
+	gpgkeyexpiry=$(opt_get "gpg-keyexpiry")
 	desc=$(opt_get "description")
 	proto=$(opt_get "proto")
 
@@ -378,12 +523,28 @@ main() {
 		return 1
 	fi
 
+	if ! gpg_keyring_open "$gpgkeyring"; then
+		log_error "Could not open GPG keyring $gpgkeyring"
+		return 1
+	fi
+
+	if ! gpgkey=$(gpg_keyring_get_key "$gpgkeyring" "distbot"); then
+		log_info "No key \"distbot\" in keyring $gpgkeyring. Generating a new one."
+		if ! gpgkey=$(gpg_keyring_generate_key "$gpgkeyring" "distbot"        \
+		                                       "$gpgname" "$gpgemail"         \
+		                                       "$name Repository Housekeeper" \
+		                                       "$gpgkeylen" "$gpgkeyexpiry"); then
+			log_info "Could not generate key \"distbot\" in keyring $gpgkeyring"
+			return 1
+		fi
+	fi
+
 	if ! looks_like_a_repository "$path"; then
 		# Create new repository
 		log_info "Initializing repository $name in $path"
 
 		if ! repo_init "$path" "$name" "${architectures[*]}" \
-		               "$gpgkey" "$desc" "${codename_map[@]}"; then
+		               "$gpgkeyring" "$desc" "${codename_map[@]}"; then
 			log_error "Could not initialize repository"
 			return 1
 		fi
@@ -399,7 +560,7 @@ main() {
 		exit 1
 	fi
 
-	if ! include "log" "opt" "queue" "inst" "foundry/msg" "foundry/context"; then
+	if ! include "log" "opt" "gpg" "queue" "inst" "foundry/msg" "foundry/context"; then
 		exit 1
 	fi
 
