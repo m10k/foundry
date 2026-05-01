@@ -44,6 +44,42 @@ publish_results() {
 	return 0
 }
 
+get_key() {
+	local keyring="$1"
+	local keyname="$2"
+
+	local name
+	local email
+	local comment
+	local keylength
+	local keyexpiry
+	local fingerprint
+	local -i expiration
+
+	# If the key exists and it doesn't expire within 30 days, return its fingerprint
+	if fingerprint=$(gpg_keyring_get_key "$keyring" "$keyname") &&
+	   expiration=$(gpg_keyring_get_key_expiration "$keyring" "$keyname") &&
+	   (( expiration > 2592000 )); then
+		printf '%s\n' "$fingerprint"
+		return 0
+	fi
+
+	name=$(opt_get "gpg-name")
+	email=$(opt_get "gpg-email")
+	comment="Foundry Signbot on $HOSTNAME"
+	keylength=$(opt_get "gpg-keylength")
+	keyexpiry=$(opt_get "gpg-keyexpiry")
+
+	if ! fingerprint=$(gpg_keyring_generate_key "$keyring" "$keyname" "$name" "$email" \
+	                                            "$comment" "$keylength" "$keyexpiry"); then
+		log_error "Could not generate new key \"$keyname\" on keyring \"$keyring\""
+		return 1
+	fi
+
+	printf '%s\n' "$fingerprint"
+	return 0
+}
+
 handle_build_message() {
 	local endpoint="$1"
 	local publish_to="$2"
@@ -60,12 +96,24 @@ handle_build_message() {
 	local signlog
 	local result
 
+	local gpg_keyring
+	local gpg_keyring_path
+	local gpg_key
+
 	if ! result=$(foundry_msg_build_get_result "$buildmsg")         ||
 	   ! repository=$(foundry_msg_build_get_repository "$buildmsg") ||
 	   ! branch=$(foundry_msg_build_get_branch "$buildmsg")         ||
 	   ! ref=$(foundry_msg_build_get_ref "$buildmsg")               ||
 	   ! build_context=$(foundry_msg_build_get_context "$buildmsg"); then
 		log_warn "Malformed build message. Dropping."
+		return 1
+	fi
+
+	gpg_keyring=$(opt_get "gpg-keyring")
+	gpg_keyring_path=$(gpg_keyring_get_path "$gpg_keyring")
+
+	if ! gpg_key=$(get_key "$gpg_keyring" "signbot"); then
+		log_error "Could not obtain key from keyring $gpg_keyring"
 		return 1
 	fi
 
@@ -94,14 +142,21 @@ handle_build_message() {
 	result=0
 
 	while read -r artifact; do
+		local -a args
+
 		if [[ "$artifact" != *".deb" ]]; then
 			continue
 		fi
 
-		if ! signlog+=$(dpkg-sig --sign "builder" \
-					 -k "$signer_key" \
-					 "$artifact" 2>&1); then
-			log_error "Could not sign $artifact with key $signer_key"
+		args=(
+			--batch=1
+			--sign "builder"
+			-k "$gpg_key"
+			"$artifact"
+		)
+
+		if ! signlog+=$(GNUPGHOME="$gpg_keyring_path" dpkg-sig "${args[@]}" 2>&1); then
+			log_error "Could not sign $artifact with key $gpg_key from $gpg_keyring_path"
 			result=1
 
 		elif ! signlog+=$(foundry_context_add_file "$context" \
@@ -141,7 +196,6 @@ dispatch_tasks() {
 	local endpoint_name="$1"
 	local watch="$2"
 	local publish_to="$3"
-	local signer_key="$4"
 
 	local endpoint
 
@@ -178,7 +232,7 @@ dispatch_tasks() {
 		fi
 
 		inst_set_status "Handling build message"
-		handle_build_message "$endpoint" "$publish_to" "$data" "$signer_key"
+		handle_build_message "$endpoint" "$publish_to" "$data"
 	done
 
 	return 0
@@ -188,16 +242,27 @@ main() {
 	local endpoint
 	local watch
 	local publish_to
-	local key
 	local proto
+	local keyring
 	declare -ag sign_branches
 
-	opt_add_arg "e" "endpoint"    "v"  "pub/signbot" "The IPC endpoint to listen on"
-	opt_add_arg "w" "watch"       "v"  "builds"      "The topic to watch for build messages"
-	opt_add_arg "p" "publish-to"  "v"  "signs"       "The topic to publish signs under"
-	opt_add_arg "b" "sign-branch" "av" sign_branches "Sign packages from these branches"
-	opt_add_arg "k" "gpg-key"     "rv" ""            "Fingerprint of the key to sign with"
-	opt_add_arg "P" "proto"       "v"  "uipc"        "The IPC flavor to use"                 '^u?ipc$'
+	opt_add_arg "e" "endpoint"      "v"  "pub/signbot" "The IPC endpoint to listen on"
+	opt_add_arg "w" "watch"         "v"  "builds"      "The topic to watch for build messages"
+	opt_add_arg "p" "publish-to"    "v"  "signs"       "The topic to publish signs under"
+	opt_add_arg "b" "sign-branch"   "av" sign_branches "Sign packages from these branches"
+
+        opt_add_arg "N" "gpg-name"      "v"  "Signbot"     \
+                    "Name of the signer"
+        opt_add_arg "E" "gpg-email"     "rv" ""            \
+                    "Email address of the signer"
+        opt_add_arg "G" "gpg-keyring"   "v"  "foundry"     \
+                    "The GPG keyring to use"
+        opt_add_arg "L" "gpg-keylength" "v"  4096          \
+                    "The keylength of package signing keys"
+        opt_add_arg "X" "gpg-keyexpiry" "v"  "10y"         \
+                    "The validity period of package signing keys"
+	opt_add_arg "P" "proto"         "v"  "uipc"        \
+		    "The IPC flavor to use" '^u?ipc$'
 
 	if ! opt_parse "$@"; then
 		return 1
@@ -210,14 +275,19 @@ main() {
 	endpoint=$(opt_get "endpoint")
 	watch=$(opt_get "watch")
 	publish_to=$(opt_get "publish-to")
-	key=$(opt_get "gpg-key")
 	proto=$(opt_get "proto")
+	keyring=$(opt_get "gpg-keyring")
 
 	if ! include "$proto"; then
 		return 1
 	fi
 
-	if ! inst_start dispatch_tasks "$endpoint" "$watch" "$publish_to" "$key"; then
+	if ! gpg_keyring_open "$keyring"; then
+		log_error "Could not open GPG keyring $keyring"
+		return 1
+	fi
+
+	if ! inst_start dispatch_tasks "$endpoint" "$watch" "$publish_to"; then
 		return 1
 	fi
 
@@ -229,7 +299,7 @@ main() {
 		exit 1
 	fi
 
-	if ! include "is" "log" "opt" "inst" "foundry/context" "foundry/msg"; then
+	if ! include "is" "log" "opt" "inst" "gpg" "foundry/context" "foundry/msg"; then
 		exit 1
 	fi
 
