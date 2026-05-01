@@ -113,7 +113,7 @@ repo_set_key() {
 repo_get_key() {
 	local repo="$1"
 
-	if ! grep -oP '^SignWith: \K[0-9a-fA-F]+' "$repo/conf/distributions"; then
+	if ! grep -m 1 -oP '^SignWith: \K[0-9a-fA-F]+' "$repo/conf/distributions"; then
 		return 1
 	fi
 
