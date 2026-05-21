@@ -57,7 +57,7 @@ foundry_msg_artifact_get_checksum() {
 
 	local checksum
 
-	if ! checksum=$(jq -e -e ".checksum" <<< "$artifact"); then
+	if ! checksum=$(jq -e -r ".checksum" <<< "$artifact"); then
 		return 1
 	fi
 
