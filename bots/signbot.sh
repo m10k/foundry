@@ -174,7 +174,7 @@ handle_build_message() {
 
 	if (( result == 0 )); then
 		if ! publish_results "$endpoint" "$publish_to" \
-		                     "$signer_key" "$context"  \
+		                     "$gpg_key" "$context"     \
 		                     "$repository" "$branch"   \
 	                             "$ref"; then
 			log_error "Could not publish results to $publish_to"
@@ -182,7 +182,7 @@ handle_build_message() {
 		fi
 	else
 		if ! publish_results "$endpoint" "signbot_errors" \
-		                     "$signer_key" "$context"     \
+		                     "$gpg_key" "$context"        \
 		                     "$repository" "$branch"      \
 		                     "$ref"; then
 			log_error "Could not send error to signbot_errors"
