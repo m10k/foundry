@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # foundry/msg/artifact - Foundry artifact module for toolbox
-# Copyright (C) 2021-2022 Matthias Kruk
+# Copyright (C) 2021-2026 Matthias Kruk
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -37,6 +37,43 @@ foundry_msg_artifact_new() {
 
 	echo "$artifact"
 	return 0
+}
+
+foundry_msg_artifact_new_from_path() {
+	local uri="$1"
+
+	local output
+
+	if ! output=$(sha512sum "$uri"); then
+		return 1
+	fi
+
+	if ! [[ "$output" =~ ^([0-9a-fA-F]{128}) ]]; then
+		return 1
+	fi
+
+	foundry_msg_artifact_new "$uri" "${BASH_REMATCH[1]}"
+}
+
+foundry_msg_artifact_array_new_from_path() {
+	local uris=("$@")
+
+	local uri
+	local -a objs
+
+	objs=()
+
+	for uri in "${uris[@]}"; do
+		local obj
+
+		if ! obj=$(foundry_msg_artifact_new_from_path "$uri"); then
+			return 1
+		fi
+
+		objs+=("$obj")
+	done
+
+	json_array "${objs[@]}"
 }
 
 foundry_msg_artifact_get_uri() {
