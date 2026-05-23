@@ -34,10 +34,9 @@ foundry_msg_dist_new() {
 	local artifacts=("${@:5}")
 
 	local artifacts_json
-	local json
 	local msg
 
-	if ! artifacts_json=$(json_array "${artifacts[@]}"); then
+	if ! artifacts_json=$(foundry_msg_artifact_array_new_from_path "${artifacts[@]}"); then
 		return 1
 	fi
 
