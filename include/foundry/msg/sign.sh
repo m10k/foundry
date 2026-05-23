@@ -32,14 +32,19 @@ foundry_msg_sign_new() {
 	local repository="$3"
 	local branch="$4"
 	local ref="$5"
-	local artifacts=("${@:6}")
 
-	local artifacts_json
+	local artifact_paths
+	local artifacts
 	local json
 	local msg
 
-	if ! artifacts_json=$(json_array "${artifacts[@]}"); then
+	if ! readarray -t artifact_paths < <(foundry_context_get_files "$context" "signed") ||
+	   (( ${#artifact_paths[@]} == 0 )); then
 		return 1
+	fi
+
+	if ! artifacts=$(foundry_msg_artifact_array_new_from_path "${artifact_paths[@]}"); then
+		return 2
 	fi
 
 	if ! json=$(json_object "context"    "$context"      \
@@ -47,12 +52,12 @@ foundry_msg_sign_new() {
 				"repository" "$repository"   \
 				"branch"     "$branch"       \
 				"ref"        "$ref"          \
-				"artifacts"  "$artifacts_json"); then
-		return 1
+				"artifacts"  "$artifacts"); then
+		return 3
 	fi
 
 	if ! msg=$(foundry_msg_new "$__foundry_msg_sign_msgtype" "$json"); then
-		return 1
+		return 4
 	fi
 
 	echo "$msg"
