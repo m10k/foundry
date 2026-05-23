@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # foundry/msg/build - Foundry build message module for toolbox
-# Copyright (C) 2021-2022 Matthias Kruk
+# Copyright (C) 2021-2026 Matthias Kruk
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -17,7 +17,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 __init() {
-	if ! include "json" "foundry/msg/artifact"; then
+	if ! include "json" "foundry/msg/artifact" "foundry/context"; then
 		return 1
 	fi
 
@@ -32,14 +32,19 @@ foundry_msg_build_new() {
 	local branch="$3"
 	local ref="$4"
 	local result="$5"
-	local -n __foundry_msg_build_new_artifacts="$6"
 
-	local artifact_array
+	local artifact_paths
+	local artifacts
 	local json
 	local msg
 
-	if ! artifact_array=$(json_array "${__foundry_msg_build_new_artifacts[@]}"); then
+	if ! readarray -t artifact_paths < <(foundry_context_get_files "$context" "build") ||
+	   (( ${#artifact_paths[@]} == 0 )); then
 		return 1
+	fi
+
+	if ! artifacts=$(foundry_msg_artifact_array_new_from_path "${artifact_paths[@]}"); then
+		return 2
 	fi
 
 	if ! json=$(json_object "context"    "$context"       \
@@ -47,12 +52,12 @@ foundry_msg_build_new() {
 				"branch"     "$branch"        \
 				"ref"        "$ref"           \
 				"result"     "$result"        \
-				"artifacts"  "$artifact_array"); then
-		return 1
+				"artifacts"  "$artifacts"); then
+		return 3
 	fi
 
 	if ! msg=$(foundry_msg_new "$__foundry_msg_build_msgtype" "$json"); then
-		return 1
+		return 4
 	fi
 
 	echo "$msg"
