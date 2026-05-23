@@ -160,6 +160,20 @@ verify_package() {
 	return "$retval"
 }
 
+repo_find_package() {
+	local repo="$1"
+	local package="$2"
+
+	local match
+
+	while read -r match; do
+		printf '%s\n' "$match"
+		return 0
+	done < <(find "$repo" -type f -name "$package")
+
+	return 1
+}
+
 process_new_package() {
 	local context="$1"
 	local package="$2"
@@ -169,8 +183,11 @@ process_new_package() {
 
 	local failed
 	local logoutput
+	local package_name
+	local package_path
 
 	failed=true
+	package_name="${package##*/}"
 
 	log_info "[#$context] New package: $package"
 
@@ -178,6 +195,8 @@ process_new_package() {
 		log_error "[#$context] Invalid signature on package $package"
 	elif ! logoutput+=$(repo_add_package "$repo" "$codename" "$package" 2>&1); then
 		log_error "[#$context] Could not process $package"
+	elif ! package_path=$(repo_find_package "$repo" "$package_name"); then
+		log_error "[#$context] Could not find $package in $repo"
 	else
 		log_info "[#$context] $package successfully added to $repo:$codename"
 		failed=false
@@ -198,6 +217,7 @@ process_new_package() {
 		return 1
 	fi
 
+	printf '%s\n' "$package_path"
 	return 0
 }
 
@@ -261,6 +281,7 @@ process_sign_message() {
 
 	for artifact in "${artifacts[@]}"; do
 		local artifact_name
+		local artifact_path
 		local extension
 
 		artifact_name="${artifact##*/}"
@@ -271,8 +292,9 @@ process_sign_message() {
 			continue
 		fi
 
-		if process_new_package "$context" "$artifact" "$repo" "$codename" "$keyring"; then
-			distributed+=("$artifact_name")
+		if artifact_path=$(process_new_package "$context" "$artifact" "$repo" \
+		                                       "$codename" "$keyring"); then
+			distributed+=("$artifact_path")
 		else
 			log_error "Could not distribute $artifact_name"
 		fi
