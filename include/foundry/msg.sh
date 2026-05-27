@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # foundry/msg - Foundry message module for toolbox
-# Copyright (C) 2021-2022 Matthias Kruk
+# Copyright (C) 2021-2026 Matthias Kruk
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -28,6 +28,7 @@ __init() {
 		"foundry/msg/merge"
 		"foundry/msg/sign"
 		"foundry/msg/test"
+		"foundry/msg/log"
 	)
 
 	deps=(
@@ -46,6 +47,7 @@ __init() {
 	declare -gxir __foundry_msg_type_merge=4
 	declare -gxir __foundry_msg_type_sign=5
 	declare -gxir __foundry_msg_type_test=6
+	declare -gxir __foundry_msg_type_log=7
 
 	declare -gxA __foundry_msg_typemap
 
@@ -55,6 +57,7 @@ __init() {
 	__foundry_msg_typemap["merge"]="$__foundry_msg_type_merge"
 	__foundry_msg_typemap["sign"]="$__foundry_msg_type_sign"
 	__foundry_msg_typemap["test"]="$__foundry_msg_type_test"
+	__foundry_msg_typemap["log"]="$__foundry_msg_type_log"
 
 	return 0
 }
