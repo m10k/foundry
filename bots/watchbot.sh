@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # watchbot.sh - Foundry git repository monitor bot
-# Copyright (C) 2021-2023 Matthias Kruk
+# Copyright (C) 2021-2026 Matthias Kruk
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -200,10 +200,9 @@ fetch_heads() {
 }
 
 send_notification() {
-	local endpoint="$1"
-	local topic="$2"
-	local watch="$3"
-	local ref="$4"
+	local topic="$1"
+	local watch="$2"
+	local ref="$3"
 
 	local repository
 	local branch
@@ -213,72 +212,58 @@ send_notification() {
 	branch=$(watch_to_branch "$watch")
 	msg=$(foundry_msg_commit_new "$repository" "$branch" "$ref")
 
-	if ! ipc_endpoint_publish "$endpoint" "$topic" "$msg"; then
+	if ! foundry_bot_publish "$topic" "$msg"; then
 		return 1
 	fi
 
 	return 0
 }
 
-_watch() {
+poll_repositories() {
 	local topic="$1"
-	local interval="$2"
-	local watchlist=("${@:3}")
+	local watchlist=("${@:2}")
 
-	local endpoint
-	declare -A old_heads
-	declare -A new_heads
+	local watch
 
-	if ! endpoint=$(ipc_endpoint_open); then
-		return 1
-	fi
+	inst_set_status "Polling ${#watchlist[@]} repositories"
+	log_info "Polling ${#watchlist[@]} repositories"
 
-	while inst_running; do
-		local watch
+	fetch_heads new_heads "${watchlist[@]}"
 
-		inst_set_status "Checking ${#watchlist[@]} repositories for updates"
-		log_info "Checking ${#watchlist[@]} repositories for updates"
+	for watch in "${watchlist[@]}"; do
+		local old_head
+		local new_head
 
-		fetch_heads new_heads "${watchlist[@]}"
+		old_head="${old_heads[$watch]}"
+		new_head="${new_heads[$watch]}"
 
-		for watch in "${watchlist[@]}"; do
-			local old_head
-			local new_head
+		if [[ -z "$new_head" ]]; then
+			# Failed to fetch head for this repository
+			continue
+		fi
 
-			old_head="${old_heads[$watch]}"
-			new_head="${new_heads[$watch]}"
+		if [[ "$old_head" != "$new_head" ]]; then
+			log_info "HEAD has changed on $watch"
 
-			if [[ -z "$new_head" ]]; then
-				# Failed to fetch head for this watch
-				continue
+			if send_notification "$topic" "$watch" "$new_head"; then
+				old_heads["$watch"]="$new_head"
+			else
+				log_warn "Could not publish to $topic"
 			fi
-
-			if [[ "$old_head" != "$new_head" ]]; then
-			        log_info "HEAD has changed on $watch"
-
-				if send_notification "$endpoint" "$topic" \
-						     "$watch" "$new_head"; then
-					old_heads["$watch"]="$new_head"
-				else
-					log_warn "Could not publish to $topic"
-				fi
-			fi
-		done
-
-		inst_set_status "Sleeping for $interval seconds"
-		sleep "$interval"
+		fi
 	done
 
-	ipc_endpoint_close "$endpoint"
-
+	inst_set_status "Sleeping"
 	return 0
 }
 
 main() {
-	local watchlist
-	local interval
+	local -a watchlist
+	local -i interval
 	local publish_to
-	local proto
+
+	declare -A old_heads
+	declare -A new_heads
 
 	opt_add_arg "r" "repository" "rv" ""          \
 		    "Repository to watch for updates" \
@@ -287,33 +272,23 @@ main() {
 		    "Topic to publish notifications"
 	opt_add_arg "i" "interval"   "v"  30          \
 		    "Update check interval" "^[0-9]+$"
-	opt_add_arg "P" "proto"      "v"  "uipc"      \
-	            "The IPC flavor to use"           \
-	            '^u?ipc$'
 
 	if ! opt_parse "$@"; then
 		return 1
 	fi
 
-	publish_to=$(opt_get "publish-to")
 	interval=$(opt_get "interval")
-	proto=$(opt_get "proto")
+	publish_to=$(opt_get "publish-to")
 
-	if ! include "$proto"; then
-		return 1
-	fi
-
-	inst_start _watch "$publish_to" "$interval" "${watchlist[@]}"
+	foundry_bot_register_timer poll_repositories "$interval" "$publish_to" "${watchlist[@]}"
+	foundry_bot_run
 
 	return 0
 }
 
 {
-	if ! . toolbox.sh; then
-		exit 1
-	fi
-
-	if ! include "log" "opt" "inst" "foundry/msg"; then
+	if ! . toolbox.sh ||
+	   ! include "log" "opt" "foundry/msg" "foundry/bot"; then
 		exit 1
 	fi
 
