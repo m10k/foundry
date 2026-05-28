@@ -34,10 +34,12 @@ __init() {
 }
 
 foundry_bot_init() {
+	local endpoint_name="$1"
+
 	if [[ -z "$__foundry_bot_endpoint" ]]; then
 		local endpoint
 
-		if ! endpoint=$(ipc_endpoint_open); then
+		if ! endpoint=$(ipc_endpoint_open "$endpoint_name"); then
 			return 1
 		fi
 
