@@ -38,8 +38,7 @@ foundry_msg_build_new() {
 	local json
 	local msg
 
-	if ! readarray -t artifact_paths < <(foundry_context_get_files "$context" "build") ||
-	   (( ${#artifact_paths[@]} == 0 )); then
+	if ! readarray -t artifact_paths < <(foundry_context_get_files "$context" "build"); then
 		return 1
 	fi
 
