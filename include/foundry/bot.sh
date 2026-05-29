@@ -52,18 +52,19 @@ foundry_bot_init() {
 
 foundry_bot_register_handler() {
 	local handler="$1"
-	local topics=("${@:2}")
-
-	local topic
+	local topic="$2"
+	local args=("${@:3}")
 
 	if ! foundry_bot_init ||
-	   ! ipc_endpoint_subscribe "$__foundry_bot_endpoint" "${topics[@]}"; then
+	   ! ipc_endpoint_subscribe "$__foundry_bot_endpoint" "$topic"; then
 		return 1
 	fi
 
-	for topic in "${topics[@]}"; do
-		__foundry_bot_topic_handlers["$topic"]="$handler"
-	done
+	declare -gxa "__foundry_bot_topic_args_$topic"
+	local -n argref="__foundry_bot_topic_args_$topic"
+
+	__foundry_bot_topic_handlers["$topic"]="$handler"
+	argref=("${args[@]}")
 
 	return 0
 }
@@ -143,7 +144,9 @@ _foundry_bot_run() {
 		if msg=$(ipc_endpoint_recv "$__foundry_bot_endpoint" 1) &&
 		   topic=$(ipc_msg_get_topic "$msg") &&
 		   [[ -n "${__foundry_bot_topic_handlers[$topic]}" ]]; then
-			"${__foundry_bot_topic_handlers[$topic]}" "$msg"
+			local -n args="__foundry_bot_topic_args_$topic"
+
+			"${__foundry_bot_topic_handlers[$topic]}" "$msg" "${args[@]}"
 		fi
 
 		_foundry_bot_call_timers
