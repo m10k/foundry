@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # signbot.sh - Foundry Debian package sign bot
-# Copyright (C) 2021-2023 Matthias Kruk
+# Copyright (C) 2021-2026 Matthias Kruk
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -80,11 +80,10 @@ get_key() {
 	return 0
 }
 
-handle_build_message() {
-	local endpoint="$1"
-	local publish_to="$2"
-	local buildmsg="$3"
-	local signer_key="$4"
+sign_build() {
+	local publish_to="$1"
+	local buildmsg="$2"
+	local gpg_keyring="$3"
 
 	local repository
 	local branch
@@ -96,7 +95,6 @@ handle_build_message() {
 	local signlog
 	local result
 
-	local gpg_keyring
 	local gpg_keyring_path
 	local gpg_key
 
@@ -109,13 +107,16 @@ handle_build_message() {
 		return 1
 	fi
 
-	gpg_keyring=$(opt_get "gpg-keyring")
+	log_info "Signing artifacts in context $build_context"
+
 	gpg_keyring_path=$(gpg_keyring_get_path "$gpg_keyring")
 
 	if ! gpg_key=$(get_key "$gpg_keyring" "signbot"); then
 		log_error "Could not obtain key from keyring $gpg_keyring"
 		return 1
 	fi
+
+	log_info "Using key $gpg_key from keyring $gpg_keyring"
 
 	if ! is_digits "$result" ||
 	   (( result != 0 )); then
@@ -192,48 +193,27 @@ handle_build_message() {
 	return "$result"
 }
 
-dispatch_tasks() {
-	local endpoint_name="$1"
-	local watch="$2"
-	local publish_to="$3"
+handle_build_message() {
+	local msg="$1"
+	local publish_to="$2"
+	local keyring="$3"
 
-	local endpoint
+	local data
+	local msgtype
 
-	if ! endpoint=$(ipc_endpoint_open "$endpoint_name"); then
-		log_error "Could not open IPC endpoint $endpoint_name"
+	if ! data=$(ipc_msg_get_data "$msg"); then
+		log_warn "Received message without data. Dropping."
 		return 1
 	fi
 
-	if ! ipc_endpoint_subscribe "$endpoint" "$watch"; then
-		log_error "Could not subscribe to $watch"
+	if ! msgtype=$(foundry_msg_get_type "$data") ||
+	   [[ "$msgtype" != "build" ]]; then
+		log_warn "Received message with unexpected type. Dropping."
 		return 1
 	fi
 
-	while inst_running; do
-		local msg
-		local data
-		local msgtype
-
-		inst_set_status "Watching for build messages"
-
-		if ! msg=$(ipc_endpoint_recv "$endpoint" 5); then
-			continue
-		fi
-
-		if ! data=$(ipc_msg_get_data "$msg"); then
-			log_warn "Received message without data. Dropping."
-			continue
-		fi
-
-		if ! msgtype=$(foundry_msg_get_type "$data") ||
-		   [[ "$msgtype" != "build" ]]; then
-			log_warn "Received message with unexpected type. Dropping."
-			continue
-		fi
-
-		inst_set_status "Handling build message"
-		handle_build_message "$endpoint" "$publish_to" "$data"
-	done
+	inst_set_status "Handling build message"
+	sign_build "$publish_to" "$data" "$keyring"
 
 	return 0
 }
@@ -275,20 +255,23 @@ main() {
 	endpoint=$(opt_get "endpoint")
 	watch=$(opt_get "watch")
 	publish_to=$(opt_get "publish-to")
-	proto=$(opt_get "proto")
 	keyring=$(opt_get "gpg-keyring")
-
-	if ! include "$proto"; then
-		return 1
-	fi
 
 	if ! gpg_keyring_open "$keyring"; then
 		log_error "Could not open GPG keyring $keyring"
-		return 1
+		return 2
 	fi
 
-	if ! inst_start dispatch_tasks "$endpoint" "$watch" "$publish_to"; then
-		return 1
+	if ! foundry_bot_init "$endpoint"; then
+		return 3
+	fi
+
+	if ! foundry_bot_register_handler handle_build_message "$watch" "$publish_to" "$keyring"; then
+		return 4
+	fi
+
+	if ! foundry_bot_run; then
+		return 5
 	fi
 
 	return 0
@@ -299,7 +282,7 @@ main() {
 		exit 1
 	fi
 
-	if ! include "is" "log" "opt" "inst" "gpg" "foundry/context" "foundry/msg"; then
+	if ! include "is" "log" "opt" "gpg" "foundry/bot" "foundry/context" "foundry/msg"; then
 		exit 1
 	fi
 
