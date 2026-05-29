@@ -348,10 +348,11 @@ handle_dist() {
 }
 
 handle_message() {
-	local message="$1"
-	local feed="$2"
-	local output="$3"
+	local msg="$1"
+	local output="$2"
+	local feed="$3"
 
+	local data
 	local type
 	local -i err
 	local -A handlers
@@ -363,10 +364,15 @@ handle_message() {
 
 	err=1
 
-	if type=$(foundry_msg_get_type "$message"); then
+	if ! data=$(ipc_msg_get_data "$msg"); then
+		log_warn "Ignoring message without data"
+		return 1
+	fi
+
+	if type=$(foundry_msg_get_type "$data"); then
 		if array_contains "$type" "${!handlers[@]}"; then
 			log_info "Received a $type message"
-			if "${handlers["$type"]}" "$message" "$feed" "$output"; then
+			if "${handlers["$type"]}" "$data" "$feed" "$output"; then
 				err=0
 			fi
 		else
@@ -379,46 +385,6 @@ handle_message() {
 	return "$err"
 }
 
-handle_messages() {
-	local output="$1"
-	local feed="$2"
-
-	local endpoint
-	local -i err
-
-	if ! endpoint=$(ipc_endpoint_open); then
-		log_error "Could not open IPC endpoint"
-		return 1
-	fi
-	log_info "Using IPC endpoint $endpoint"
-
-	log_info "Subscribing to topics: ${topics[*]}"
-	if ipc_endpoint_subscribe "$endpoint" "${topics[@]}"; then
-
-		while inst_running; do
-			local msg
-			local topic
-			local data
-
-			if ! msg=$(ipc_endpoint_recv "$endpoint" 5) ||
-			   ! data=$(ipc_msg_get_data "$msg"); then
-				continue
-			fi
-
-			if topic=$(ipc_msg_get_topic "$data"); then
-				log_info "Handling message from topic $topic"
-			fi
-
-			handle_message "$data" "$feed" "$output"
-		done
-	else
-		err=1
-	fi
-
-	ipc_endpoint_close "$endpoint"
-	return "$err"
-}
-
 main() {
 	local output
 	local owner_name
@@ -427,6 +393,7 @@ main() {
 	local feed_name
 	local feed
 	local -a topics
+	local topic
 
 	topics=(
 		"commits"
@@ -462,12 +429,22 @@ main() {
 	atom_feed_set_date "$feed"
 	atom_feed_add_author "$feed" "$author_name" "$author_email"
 
-	inst_start handle_messages "$output" "$feed"
+	for topic in "${topics[@]}"; do
+		if ! foundry_bot_register_handler handle_message "$topic" "$output" "$feed"; then
+			return 2
+		fi
+	done
+
+	if ! foundry_bot_run; then
+		return 3
+	fi
+
+	return 0
 }
 
 {
 	if ! . toolbox.sh ||
-	   ! include "log" "opt" "inst" "uipc" "atom" "foundry/msg"; then
+	   ! include "log" "opt" "uipc" "atom" "foundry/msg" "foundry/bot"; then
 		exit 1
 	fi
 
