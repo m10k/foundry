@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # buildbot.sh - Foundry Debian package build bot
-# Copyright (C) 2021-2023 Matthias Kruk
+# Copyright (C) 2021-2026 Matthias Kruk
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -376,51 +376,27 @@ handle_commit_message() {
 }
 
 dispatch_tasks() {
-	local endpoint_name="$1"
-	local watch="$2"
-	local publish_to="$3"
-	local -i allow_unsigned="$4"
+	local msg="$1"
+	local publish_to="$2"
+	local -i allow_unsigned="$3"
 
-	local endpoint
+	local data
+	local msgtype
 
-	if ! endpoint=$(ipc_endpoint_open "$endpoint_name"); then
-		log_error "Could not open endpoint $endpoint_name"
+	if ! data=$(ipc_msg_get_data "$msg"); then
+		log_warn "Dropping malformed message"
 		return 1
 	fi
 
-	if ! ipc_endpoint_subscribe "$endpoint" "$watch"; then
-		log_error "Could not subscribe to $watch"
-		return 1
+	if ! msgtype=$(foundry_msg_get_type "$data") ||
+	   [[ "$msgtype" != "commit" ]]; then
+		log_warn "Dropping message with unexpected type"
+		return 2
 	fi
 
-	while inst_running; do
-		local msg
-		local data
-		local msgtype
-
-		inst_set_status "Awaiting commit messages"
-
-		if ! msg=$(ipc_endpoint_recv "$endpoint" 5); then
-			continue
-		fi
-
-		if ! data=$(ipc_msg_get_data "$msg"); then
-			log_warn "Dropping malformed message"
-			continue
-		fi
-
-		if ! msgtype=$(foundry_msg_get_type "$data") ||
-		   [[ "$msgtype" != "commit" ]]; then
-			log_warn "Dropping message with unexpected type"
-			continue
-		fi
-
-		inst_set_status "Handling commit message"
-
-		handle_commit_message "$endpoint" "$publish_to" "$data" "$allow_unsigned"
-	done
-
-	return 0
+	inst_set_status "Handling commit message"
+	handle_commit_message "$endpoint" "$publish_to" "$data" "$allow_unsigned"
+	return "$?"
 }
 
 
@@ -428,8 +404,8 @@ main() {
 	local endpoint
 	local watch
 	local publish_to
-	local proto
 	local -i allow_unsigned
+
 	declare -ag build_branches
         declare -ag autobump_branches
 	declare -ag extra_repositories
@@ -440,8 +416,6 @@ main() {
 	opt_add_arg "p" "publish-to"     "v" "builds"            "The topic to publish builds under"
 	opt_add_arg "a" "autobump"       "av" autobump_branches  "Automatically bump revision on branch"
 	opt_add_arg "b" "build-branch"   "av" build_branches     "Branch to build packages from"
-	opt_add_arg "P" "proto"          "v" "uipc"              "The IPC flavor to use"                   \
-	            '^u?ipc$'
 	opt_add_arg "U" "allow-unsigned" ""  0                   "Don't refuse to build unsigned code"
 	opt_add_arg "r" "repository"     "av" extra_repositories "Additional repository to use for builds" \
 	            '^([^ ]+) ([^ ]+)( [^ ]+)+$'
@@ -459,26 +433,26 @@ main() {
 	endpoint=$(opt_get "endpoint")
 	watch=$(opt_get "watch")
 	publish_to=$(opt_get "publish-to")
-	proto=$(opt_get "proto")
 	allow_unsigned=$(opt_get "allow-unsigned")
 
-	if ! include "$proto"; then
+	if ! foundry_bot_init "$endpoint"; then
 		return 1
 	fi
 
-	if ! inst_start dispatch_tasks "$endpoint" "$watch" "$publish_to" "$allow_unsigned"; then
-		return 1
+	if ! foundry_bot_register_handler dispatch_tasks "$watch" "$publish_to" "$allow_unsigned"; then
+		return 2
+	fi
+
+	if ! foundry_bot_run; then
+		return 2
 	fi
 
 	return 0
 }
 
 {
-	if ! . toolbox.sh; then
-		exit 1
-	fi
-
-	if ! include "log" "opt" "inst" "foundry/msg" "foundry/context"; then
+	if ! . toolbox.sh ||
+	   ! include "log" "opt" "foundry/bot" "foundry/msg" "foundry/context"; then
 		exit 1
 	fi
 
