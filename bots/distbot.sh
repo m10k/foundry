@@ -358,11 +358,10 @@ renew_key_if_needed() {
 	return 0
 }
 
-watch_new_packages() {
-	local endpoint_name="$1"
-	local watch="$2"
-	local publish_to="$3"
-	local repo="$4"
+handle_sign_message() {
+	local msg="$1"
+	local publish_to="$2"
+	local repo="$3"
 
 	local gpg_keyring
 	local gpg_name
@@ -370,8 +369,8 @@ watch_new_packages() {
 	local gpg_keylen
 	local gpg_keyexpiry
 	local repo_name
-
-	local endpoint
+	local signmsg
+	local msgtype
 
 	gpg_keyring=$(opt_get "gpg-keyring")
 	gpg_name=$(opt_get "gpg-name")
@@ -380,51 +379,31 @@ watch_new_packages() {
 	gpg_keyexpiry=$(opt_get "gpg-keyexpiry")
 	repo_name=$(opt_get "name")
 
-	if ! endpoint=$(ipc_endpoint_open "$endpoint_name"); then
-		log_error "Could not listen on IPC endpoint $endpoint_name"
+	if ! renew_key_if_needed "$repo" "$gpg_keyring" "$gpg_name" "$gpg_email"   \
+	                         "$repo_name Repository Housekeeper" "$gpg_keylen" \
+	                         "$gpg_keyexpiry"; then
+		log_error "Could not renew GPG key"
 		return 1
 	fi
 
-	if ! ipc_endpoint_subscribe "$endpoint" "$watch"; then
-		log_error "Could not subscribe to $watch"
-		return 1
+	if ! signmsg=$(ipc_msg_get_data "$msg"); then
+		log_warn "Dropping message without data"
+		return 2
 	fi
 
-	while inst_running; do
-		local msg
-		local signmsg
-		local msgtype
+	if ! msgtype=$(foundry_msg_get_type "$signmsg"); then
+		log_warn "Dropping message without type"
+		return 3
+	fi
 
-		if ! renew_key_if_needed "$repo" "$gpg_keyring" "$gpg_name" "$gpg_email"   \
-		                         "$repo_name Repository Housekeeper" "$gpg_keylen" \
-		                         "$gpg_keyexpiry"; then
-			log_error "Could not renew GPG key"
-			break
-		fi
+	if [[ "$msgtype" != "sign" ]]; then
+		log_warn "Dropping message with unexpected type $msgtype"
+		return 4
+	fi
 
-		inst_set_status "Waiting for sign messages"
-
-		if ! msg=$(ipc_endpoint_recv "$endpoint" 5); then
-			continue
-		fi
-
-		if ! signmsg=$(ipc_msg_get_data "$msg"); then
-			log_warn "Dropping message without data"
-			continue
-		fi
-
-		if ! msgtype=$(foundry_msg_get_type "$signmsg"); then
-			log_warn "Dropping message without type"
-			continue
-		fi
-
-		if [[ "$msgtype" != "sign" ]]; then
-			log_warn "Dropping message with unexpected type $msgtype"
-			continue
-		fi
-
-		process_sign_message "$repo" "$signmsg" "$endpoint" "$publish_to" "$gpg_keyring"
-	done
+	if ! process_sign_message "$repo" "$signmsg" "$endpoint" "$publish_to" "$gpg_keyring"; then
+		return 5
+	fi
 
 	return 0
 }
@@ -539,11 +518,6 @@ main() {
 	gpgkeylen=$(opt_get "gpg-keylength")
 	gpgkeyexpiry=$(opt_get "gpg-keyexpiry")
 	desc=$(opt_get "description")
-	proto=$(opt_get "proto")
-
-	if ! include "$proto"; then
-		return 1
-	fi
 
 	if ! gpg_keyring_open "$gpgkeyring"; then
 		log_error "Could not open GPG keyring $gpgkeyring"
@@ -572,17 +546,24 @@ main() {
 		fi
 	fi
 
-	inst_start watch_new_packages "$endpoint" "$watch" "$publish_to" "$path"
+	if ! foundry_bot_init "$endpoint"; then
+		return 2
+	fi
+
+	if ! foundry_bot_register_handler handle_sign_message "$watch" "$publish_to" "$path"; then
+		return 3
+	fi
+
+	if ! foundry_bot_run; then
+		return 4
+	fi
 
 	return 0
 }
 
 {
-	if ! . toolbox.sh; then
-		exit 1
-	fi
-
-	if ! include "log" "opt" "gpg" "queue" "inst" "foundry/msg" "foundry/context"; then
+	if ! . toolbox.sh ||
+	   ! include "log" "opt" "gpg" "foundry/bot" "foundry/msg" "foundry/context"; then
 		exit 1
 	fi
 
